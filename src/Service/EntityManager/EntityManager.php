@@ -213,12 +213,12 @@ final class EntityManager implements EntityManagerInterface
         do {
             $fullRequestItems = $this->getRequestItems();
             $requestItems = $fullRequestItems;
-            do {
+            while ($requestItems) {
                 $result = $this->dynamoDbClient->batchWriteItem([
                     'RequestItems' => $requestItems,
                 ]);
                 $requestItems = $result->get('UnprocessedItems');
-            } while ($requestItems);
+            }
         } while ($fullRequestItems);
     }
 
