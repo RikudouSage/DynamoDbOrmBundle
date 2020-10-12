@@ -228,6 +228,9 @@ final class EntityManager implements EntityManagerInterface
             $item = &$requestArray['RequestItems'][$metadata->getTable()][$index[$metadata->getTable()]]['PutRequest']['Item'];
 
             foreach ($metadata->getColumns() as $columnName => $definition) {
+                if ($definition->isOneToMany()) {
+                    continue;
+                }
                 $getterNames = ['get' . ucfirst($columnName), 'is' . ucfirst($columnName)];
                 $getter = null;
                 foreach ($getterNames as $getterName) {
