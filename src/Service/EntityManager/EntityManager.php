@@ -277,6 +277,30 @@ final class EntityManager implements EntityManagerInterface
                     $value = $generator->generateId();
                 }
 
+                if ($definition->isManyToOne() && is_object($value)) {
+                    assert($definition->getManyToOneEntity() !== null);
+                    $linkedMetadata = $this->entityMetadataRegistry->getForEntity($definition->getManyToOneEntity());
+                    $primaryKey = $linkedMetadata->getMappedName($linkedMetadata->getPrimaryColumn()->getName());
+                    $getters = ['get' . ucfirst($primaryKey), 'is' . ucfirst($primaryKey)];
+                    $callable = null;
+                    foreach ($getters as $getter) {
+                        if (method_exists($value, $getter)) {
+                            $callable = [$value, $getter];
+                            break;
+                        }
+                    }
+                    if ($callable === null) {
+                        $callable = function () use ($primaryKey, $value) {
+                            $reflection = new ReflectionProperty(get_class($value), $primaryKey);
+                            $reflection->setAccessible(true);
+
+                            return $reflection->getValue($value);
+                        };
+                    }
+                    assert(is_callable($callable));
+                    $value = call_user_func($callable);
+                }
+
                 $rawType = $definition->getType(false);
                 if ($rawType === 'array' || $rawType === 'json') {
                     $value = json_encode($value);
