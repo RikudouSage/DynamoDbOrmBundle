@@ -1,0 +1,61 @@
+services:
+  rikudou.dynamo_orm.entity_manager:
+    class: Rikudou\DynamoDbOrm\Service\EntityManager\EntityManager
+    arguments:
+      - '@rikudou.dynamo_orm.entity_metadata.registry'
+      - '@rikudou.internal.dynamo_orm.dynamo_client'
+
+  rikudou.dynamo_orm.entity_metadata.registry:
+    class: Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry
+
+  rikudou.dynamo_orm.entity_mapper:
+    class: Rikudou\DynamoDbOrm\Service\EntityMapper
+    arguments:
+      - '@rikudou.dynamo_orm.entity_metadata.registry'
+      - '@rikudou.dynamo_orm.repository.registry'
+
+  rikudou.dynamo_orm.type_converter:
+    class: Rikudou\DynamoDbOrm\Service\TypeConverter
+
+  rikudou.dynamo_orm.table_name_converter:
+    class: Rikudou\DynamoDbOrm\Service\TableNameConverter
+
+  rikudou.dynamo_orm.id.registry:
+    class: Rikudou\DynamoDbOrm\Service\IdGenerator\IdGeneratorRegistry
+
+  rikudou.dynamo_orm.name_converter:
+    class: Rikudou\DynamoDbOrm\Service\NameConverter\CamelCaseToKebabCaseNameConverter
+
+  rikudou.dynamo_orm.migration.first:
+    class: Rikudou\DynamoDbOrm\Service\Migration\CreateMigrationTableMigration
+    arguments:
+      - '%rikudou.internal.dynamo_orm.migrations_table%'
+    tags:
+      - rikudou.dynamo_orm.migration
+
+  rikudou.dynamo_orm.migration.manager:
+    class: Rikudou\DynamoDbOrm\Service\Migration\MigrationManager
+    arguments:
+      - '@rikudou.internal.dynamo_orm.dynamo_client'
+      - '%rikudou.internal.dynamo_orm.migrations_table%'
+      - '@rikudou.dynamo_orm.table_name_converter'
+
+  rikudou.dynamo_orm.migration.command.migrate:
+    class: Rikudou\DynamoDbOrm\Command\MigrateMigrationsCommand
+    arguments:
+      - '@rikudou.dynamo_orm.migration.manager'
+    tags:
+      - console.command
+
+  rikudou.dynamo_orm.repository.registry:
+    class: Rikudou\DynamoDbOrm\Service\Repository\RepositoryRegistry
+
+  rikudou.dynamo_orm.id.uuid:
+    class: Rikudou\DynamoDbOrm\Service\IdGenerator\UuidIdGenerator
+    tags:
+      - rikudou.dynamo_orm.id_generator
+
+  rikudou.dynamo_orm.id.random:
+    class: Rikudou\DynamoDbOrm\Service\IdGenerator\RandomStringIdGenerator
+    tags:
+      - rikudou.dynamo_orm.id_generator

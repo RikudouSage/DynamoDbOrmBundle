@@ -1,0 +1,11 @@
+includes:
+  - vendor/thecodingmachine/phpstan-safe-rule/phpstan-safe-rule.neon
+
+parameters:
+  inferPrivatePropertyTypeFromConstructor: true
+  excludes_analyse:
+    - src/DependencyInjection/Configuration.php
+  ignoreErrors:
+#    - '#.*?expects unknown_type.*?#'
+#    - '#.*?unknown class Query.*?#'
+    - '#expects class-string<T of object>\|T of object, string given.#'

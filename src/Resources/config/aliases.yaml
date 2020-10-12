@@ -1,0 +1,3 @@
+services:
+  Rikudou\DynamoDbOrm\Service\EntityManager\EntityManagerInterface: '@rikudou.dynamo_orm.entity_manager'
+  Rikudou\DynamoDbOrm\Service\Repository\RepositoryRegistryInterface: '@rikudou.dynamo_orm.repository.registry'
