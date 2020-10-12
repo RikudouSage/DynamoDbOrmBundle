@@ -166,6 +166,22 @@ abstract class AbstractMigration implements MigrationInterface
         ]);
     }
 
+    protected function tableExists(string $table): bool
+    {
+        try {
+            $this->dynamoClient->describeTable([
+                'TableName' => $this->tableNameConverter->getName($table),
+            ]);
+
+            return true;
+        } catch (DynamoDbException $e) {
+            if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
+                return false;
+            }
+            throw $e;
+        }
+    }
+
     protected function waitForTable(string $table, int $sleep = 3, int $retries = 150): void
     {
         do {

@@ -19,9 +19,11 @@ final class CreateMigrationTableMigration extends AbstractMigration
 
     public function up(): void
     {
-        $this->createTable($this->migrationTable, ['version' => Types::NUMBER], ['applied' => Types::STRING]);
-        $this->waitForTable($this->migrationTable);
-        sleep(5);
+        if (!$this->tableExists($this->migrationTable)) {
+            $this->createTable($this->migrationTable, ['version' => Types::NUMBER], ['applied' => Types::STRING]);
+            $this->waitForTable($this->migrationTable);
+            sleep(5);
+        }
     }
 
     public function down(): void
