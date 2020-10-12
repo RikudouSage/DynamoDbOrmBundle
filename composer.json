@@ -1,5 +1,5 @@
 {
-    "name": "rikudou/dynamo-db-orm",
+    "name": "rikudou/dynamo-orm-bundle",
     "license": "MIT",
     "type": "symfony-bundle",
     "require": {
