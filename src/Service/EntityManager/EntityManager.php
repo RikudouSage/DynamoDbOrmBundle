@@ -211,14 +211,15 @@ final class EntityManager implements EntityManagerInterface
     public function flush(): void
     {
         do {
-            $requestItems = $this->getRequestItems();
+            $fullRequestItems = $this->getRequestItems();
+            $requestItems = $fullRequestItems;
             do {
                 $result = $this->dynamoDbClient->batchWriteItem([
                     'RequestItems' => $requestItems,
                 ]);
                 $requestItems = $result->get('UnprocessedItems');
-            } while ($result->get('UnprocessedItems'));
-        } while ($requestItems);
+            } while ($requestItems);
+        } while ($fullRequestItems);
     }
 
     /**
