@@ -3,9 +3,12 @@
 namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 
 use Aws\DynamoDb\DynamoDbClient;
+use ReflectionException;
 use ReflectionProperty;
+use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Exception\UnsearchableColumnException;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
+use Safe\Exceptions\JsonException;
 use function Safe\json_encode;
 use function Safe\substr;
 
@@ -207,25 +210,47 @@ final class EntityManager implements EntityManagerInterface
 
     public function flush(): void
     {
-        $requestArray = [
-            'RequestItems' => [],
-        ];
+        do {
+            $requestItems = $this->getRequestItems();
+            do {
+                $result = $this->dynamoDbClient->batchWriteItem([
+                    'RequestItems' => $requestItems,
+                ]);
+                $requestItems = $result->get('UnprocessedItems');
+            } while ($result->get('UnprocessedItems'));
+        } while ($requestItems);
+    }
 
+    /**
+     * @throws ReflectionException
+     * @throws EntityNotFoundException
+     * @throws JsonException
+     *
+     * @return mixed[]
+     */
+    private function getRequestItems(): array
+    {
+        $result = [];
         $index = [];
-        foreach ($this->toPersist as $itemToPersist) {
+        $count = 0;
+
+        foreach ($this->toPersist as $key => $itemToPersist) {
+            if ($count === 25) {
+                break;
+            }
             $metadata = $this->entityMetadataRegistry->getForEntity(get_class($itemToPersist));
-            if (!isset($requestArray['RequestItems'][$metadata->getTable()])) {
-                $requestArray['RequestItems'][$metadata->getTable()] = [];
+            if (!isset($result[$metadata->getTable()])) {
+                $result[$metadata->getTable()] = [];
             }
             if (!isset($index[$metadata->getTable()])) {
                 $index[$metadata->getTable()] = 0;
             }
-            $requestArray['RequestItems'][$metadata->getTable()][$index[$metadata->getTable()]] = [
+            $result[$metadata->getTable()][$index[$metadata->getTable()]] = [
                 'PutRequest' => [
                     'Item' => [],
                 ],
             ];
-            $item = &$requestArray['RequestItems'][$metadata->getTable()][$index[$metadata->getTable()]]['PutRequest']['Item'];
+            $item = &$result[$metadata->getTable()][$index[$metadata->getTable()]]['PutRequest']['Item'];
 
             foreach ($metadata->getColumns() as $columnName => $definition) {
                 if ($definition->isOneToMany()) {
@@ -262,13 +287,18 @@ final class EntityManager implements EntityManagerInterface
                 $item[$definition->getName()] = [$definition->getType() => $value];
             }
 
+            unset($this->toPersist[$key]);
+            ++$count;
             ++$index[$metadata->getTable()];
         }
 
-        foreach ($this->toDelete as $itemToDelete) {
+        foreach ($this->toDelete as $key => $itemToDelete) {
+            if ($count === 25) {
+                break;
+            }
             $metadata = $this->entityMetadataRegistry->getForEntity(get_class($itemToDelete));
-            if (!isset($requestArray['RequestItems'][$metadata->getTable()])) {
-                $requestArray['RequestItems'][$metadata->getTable()] = [];
+            if (!isset($result[$metadata->getTable()])) {
+                $result[$metadata->getTable()] = [];
             }
             if (!isset($index[$metadata->getTable()])) {
                 $index[$metadata->getTable()] = 0;
@@ -296,7 +326,7 @@ final class EntityManager implements EntityManagerInterface
                 break;
             }
 
-            $requestArray['RequestItems'][$metadata->getTable()][$index[$metadata->getTable()]] = [
+            $result[$metadata->getTable()][$index[$metadata->getTable()]] = [
                 'DeleteRequest' => [
                     'Key' => [
                         $metadata->getPrimaryColumn()->getName() => [
@@ -306,12 +336,11 @@ final class EntityManager implements EntityManagerInterface
                 ],
             ];
 
+            unset($this->toDelete[$key]);
             ++$index[$metadata->getTable()];
+            ++$count;
         }
 
-        do {
-            $result = $this->dynamoDbClient->batchWriteItem($requestArray);
-            $requestArray['RequestItems'] = $result->get('UnprocessedItems');
-        } while ($result->get('UnprocessedItems'));
+        return $result;
     }
 }
