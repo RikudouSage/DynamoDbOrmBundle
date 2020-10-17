@@ -81,7 +81,7 @@ final class EntityMapper
                     $value = $repository->find($value);
                 }
             } elseif ($rawType === 'array' || $rawType === 'json') {
-                $value = json_decode($rawType, true);
+                $value = json_decode($value, true);
             } elseif ($rawType === 'number') {
                 if (strval(intval($value)) !== $value) {
                     $value = (float) $value;
