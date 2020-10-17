@@ -60,11 +60,11 @@ final class RegisterEntitiesCompilerPass implements CompilerPassInterface
 
                 try {
                     $reflection = new ReflectionFile($file->getPathname());
+                    $classReflection = $reflection->getClass();
                 } catch (Throwable $e) {
                     continue;
                 }
 
-                $classReflection = $reflection->getClass();
                 if (!$annotationReader->getClassAnnotation($classReflection, Entity::class)) {
                     continue;
                 }
