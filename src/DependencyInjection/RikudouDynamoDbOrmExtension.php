@@ -61,6 +61,7 @@ final class RikudouDynamoDbOrmExtension extends Extension
     {
         $container->setParameter('rikudou.dynamo_orm.scan_directories', $configs['directories']);
         $container->setParameter('rikudou.internal.dynamo_orm.migrations_table', $configs['migrations_table']);
+        $container->setParameter('rikudou.internal.dynamo_orm.table_mapping', $configs['table_mapping'] ?? []);
     }
 
     /**

@@ -21,6 +21,7 @@ final class RegisterEntitiesCompilerPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void
     {
+        $tableMapping = $container->getParameter('rikudou.internal.dynamo_orm.table_mapping');
         $metadataRegistryDefinition = $container->getDefinition('rikudou.dynamo_orm.entity_metadata.registry');
 
         $directories = $container->getParameter('rikudou.dynamo_orm.scan_directories');
@@ -71,6 +72,7 @@ final class RegisterEntitiesCompilerPass implements CompilerPassInterface
 
                 $definition = new Definition(EntityClassMetadata::class);
                 $definition->addArgument($classReflection->getName());
+                $definition->addArgument($tableMapping);
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.name_converter'));
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.id.registry'));
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.type_converter'));

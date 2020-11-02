@@ -47,6 +47,11 @@ final class Configuration implements ConfigurationInterface
                         ->defaultValue('%kernel.project_dir%/src/Entity')
                     ->end()
                 ->end()
+                ->arrayNode('table_mapping')
+                    ->info('Mapping of entities to tables, takes precedence over tables defined in annotation')
+                    ->useAttributeAsKey('entity')
+                    ->scalarPrototype()->end()
+                ->end()
             ->end();
 
         return $treeBuilder;

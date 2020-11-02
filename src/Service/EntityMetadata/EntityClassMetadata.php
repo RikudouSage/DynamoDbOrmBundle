@@ -3,6 +3,7 @@
 namespace Rikudou\DynamoDbOrm\Service\EntityMetadata;
 
 use Doctrine\Common\Annotations\AnnotationReader;
+use LogicException;
 use ReflectionClass;
 use ReflectionException;
 use Rikudou\DynamoDbOrm\Annotation\Column;
@@ -62,8 +63,24 @@ final class EntityClassMetadata
      */
     private $tableNameConverter;
 
+    /**
+     * @var array<string, string>
+     */
+    private $tableMapping;
+
+    /**
+     * @param string                 $class
+     * @param array<string, string>  $tableMapping
+     * @param NameConverterInterface $nameConverter
+     * @param IdGeneratorRegistry    $idGeneratorRegistry
+     * @param TypeConverter          $typeConverter
+     * @param TableNameConverter     $tableNameConverter
+     *
+     * @throws EntityNotFoundException
+     */
     public function __construct(
         string $class,
+        array $tableMapping,
         NameConverterInterface $nameConverter,
         IdGeneratorRegistry $idGeneratorRegistry,
         TypeConverter $typeConverter,
@@ -75,6 +92,7 @@ final class EntityClassMetadata
         $this->typeConverter = $typeConverter;
         $this->tableNameConverter = $tableNameConverter;
         $this->parse();
+        $this->tableMapping = $tableMapping;
     }
 
     public function getClass(): string
@@ -150,7 +168,14 @@ final class EntityClassMetadata
             if (!$entityAnnotation instanceof Entity) {
                 throw new InvalidEntityException("The entity '{$this->class}' must contain @Entity annotation");
             }
-            $this->table = $this->tableNameConverter->getName($entityAnnotation->table);
+            if (isset($this->tableMapping[$this->class])) {
+                $this->table = $this->tableMapping[$this->class];
+            } else {
+                if (!$entityAnnotation->table) {
+                    throw new LogicException('You must set the table name in annotation or table mapping in config');
+                }
+                $this->table = $this->tableNameConverter->getName($entityAnnotation->table);
+            }
 
             $hasPrimaryKey = false;
             foreach ($classReflection->getProperties() as $propertyReflection) {
@@ -225,6 +250,7 @@ final class EntityClassMetadata
                     $columnDefinition['name'] = $manyToOneAnnotation->joinColumn;
                     $parser = new self(
                         $manyToOneAnnotation->entity,
+                        $this->tableMapping,
                         $this->nameConverter,
                         $this->idGeneratorRegistry,
                         $this->typeConverter,
