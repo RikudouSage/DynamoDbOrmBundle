@@ -309,6 +309,10 @@ final class EntityManager implements EntityManagerInterface
                     $value = (string) $value;
                 }
 
+                if ($value === null) {
+                    continue;
+                }
+
                 $item[$definition->getName()] = [$definition->getType() => $value];
             }
 
