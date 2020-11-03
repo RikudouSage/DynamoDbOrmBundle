@@ -91,8 +91,8 @@ final class EntityClassMetadata
         $this->idGeneratorRegistry = $idGeneratorRegistry;
         $this->typeConverter = $typeConverter;
         $this->tableNameConverter = $tableNameConverter;
-        $this->parse();
         $this->tableMapping = $tableMapping;
+        $this->parse();
     }
 
     public function getClass(): string
