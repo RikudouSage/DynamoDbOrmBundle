@@ -33,11 +33,11 @@ abstract class AbstractRepository implements RepositoryInterface
         return $this->entityMapper->map($this->getEntityClass(), $result);
     }
 
-    public function findBy(array $conditions = []): array
+    public function findBy(array $conditions = [], string $order = 'ASC'): array
     {
         return $this->entityMapper->mapMultiple(
             $this->getEntityClass(),
-            $this->entityManager->findBy($this->getEntityClass(), $conditions)
+            $this->entityManager->findBy($this->getEntityClass(), $conditions, $order)
         );
     }
 
@@ -51,11 +51,11 @@ abstract class AbstractRepository implements RepositoryInterface
         return $this->entityMapper->map($this->getEntityClass(), $result);
     }
 
-    public function findAll(): array
+    public function findAll(string $order = 'ASC'): array
     {
         return $this->entityMapper->mapMultiple(
             $this->getEntityClass(),
-            $this->entityManager->findAll($this->getEntityClass())
+            $this->entityManager->findAll($this->getEntityClass(), $order)
         );
     }
 

@@ -13,10 +13,11 @@ interface RepositoryInterface
 
     /**
      * @param array<string,mixed> $conditions
+     * @param string              $order
      *
      * @return object[]
      */
-    public function findBy(array $conditions = []): array;
+    public function findBy(array $conditions = [], string $order = 'ASC'): array;
 
     /**
      * @param array<string,mixed> $conditions
@@ -26,9 +27,11 @@ interface RepositoryInterface
     public function findOneBy(array $conditions = []): ?object;
 
     /**
+     * @param string $order
+     *
      * @return object[]
      */
-    public function findAll(): array;
+    public function findAll(string $order = 'ASC'): array;
 
     public function getEntityClass(): string;
 }

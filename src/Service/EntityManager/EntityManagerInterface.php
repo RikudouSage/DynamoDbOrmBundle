@@ -31,10 +31,11 @@ interface EntityManagerInterface
 
     /**
      * @param string $entity
+     * @param string $order
      *
      * @return array<string,array<string,mixed>>[]
      */
-    public function findAll(string $entity): array;
+    public function findAll(string $entity, string $order = 'ASC'): array;
 
     public function delete(object $entity): void;
 

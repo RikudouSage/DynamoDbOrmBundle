@@ -201,14 +201,23 @@ final class EntityManager implements EntityManagerInterface
         return reset($items);
     }
 
-    public function findAll(string $entity): array
+    public function findAll(string $entity, string $order = 'ASC'): array
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
         $requestArray = [
             'TableName' => $metadata->getTable(),
+            'ScanIndexForward' => strcasecmp($order, 'ASC') === 0,
         ];
 
         $items = [];
+
+        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEvent::TYPE_FIND_ALL, $entity, $this->dynamoDbClient);
+        $this->eventDispatcher->dispatch($event, DynamoDbOrmEvents::BEFORE_QUERY_SEND);
+        $result = $event->getResult();
+        if ($result !== null) {
+            return $result;
+        }
+        $requestArray = $event->getRequestData();
 
         do {
             $result = $this->dynamoDbClient->scan($requestArray);
