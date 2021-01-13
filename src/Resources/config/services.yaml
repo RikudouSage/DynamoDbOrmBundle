@@ -4,6 +4,7 @@ services:
     arguments:
       - '@rikudou.dynamo_orm.entity_metadata.registry'
       - '@rikudou.internal.dynamo_orm.dynamo_client'
+      - '@event_dispatcher'
 
   rikudou.dynamo_orm.entity_metadata.registry:
     class: Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry

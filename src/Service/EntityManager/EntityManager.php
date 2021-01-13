@@ -5,12 +5,15 @@ namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 use Aws\DynamoDb\DynamoDbClient;
 use ReflectionException;
 use ReflectionProperty;
+use Rikudou\DynamoDbOrm\Event\BeforeQuerySendEvent;
+use Rikudou\DynamoDbOrm\Event\DynamoDbOrmEvents;
 use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Exception\UnsearchableColumnException;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
 use Safe\Exceptions\JsonException;
 use function Safe\json_encode;
 use function Safe\substr;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final class EntityManager implements EntityManagerInterface
 {
@@ -34,12 +37,19 @@ final class EntityManager implements EntityManagerInterface
      */
     private $dynamoDbClient;
 
+    /**
+     * @var EventDispatcherInterface
+     */
+    private $eventDispatcher;
+
     public function __construct(
         EntityMetadataRegistry $entityMetadataRegistry,
-        DynamoDbClient $dynamoDbClient
+        DynamoDbClient $dynamoDbClient,
+        EventDispatcherInterface $eventDispatcher
     ) {
         $this->entityMetadataRegistry = $entityMetadataRegistry;
         $this->dynamoDbClient = $dynamoDbClient;
+        $this->eventDispatcher = $eventDispatcher;
     }
 
     public function find(string $entity, $id): ?array
@@ -64,7 +74,7 @@ final class EntityManager implements EntityManagerInterface
         return $this->dynamoDbClient->getItem($requestArray)->get('Item');
     }
 
-    public function findBy(string $entity, array $conditions = []): array
+    public function findBy(string $entity, array $conditions = [], string $order = 'ASC'): array
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
 
@@ -135,6 +145,7 @@ final class EntityManager implements EntityManagerInterface
         }
 
         $requestArray['KeyConditionExpression'] = substr($requestArray['KeyConditionExpression'], 0, -4);
+        $requestArray['ScanIndexForward'] = strcasecmp($order, 'ASC') === 0;
 
         if (count($indexes) !== 0) {
             $found = false;
@@ -154,6 +165,16 @@ final class EntityManager implements EntityManagerInterface
         }
 
         $items = [];
+
+        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEvent::TYPE_FIND_BY, $entity, $this->dynamoDbClient);
+        $this->eventDispatcher->dispatch($event, DynamoDbOrmEvents::BEFORE_QUERY_SEND);
+        $result = $event->getResult();
+
+        if ($result !== null) {
+            return $result;
+        }
+
+        $requestArray = $event->getRequestData();
 
         do {
             $result = $this->dynamoDbClient->query($requestArray);

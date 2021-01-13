@@ -15,10 +15,11 @@ interface EntityManagerInterface
     /**
      * @param string              $entity
      * @param array<string,mixed> $conditions
+     * @param string              $order
      *
      * @return array<string,array<string,mixed>>[]
      */
-    public function findBy(string $entity, array $conditions = []): array;
+    public function findBy(string $entity, array $conditions = [], string $order = 'ASC'): array;
 
     /**
      * @param string              $entity
