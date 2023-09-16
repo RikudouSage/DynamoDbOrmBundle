@@ -2,9 +2,9 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-/**
- * @Annotation
- */
-final class PrimaryKey
+use Attribute;
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final readonly class PrimaryKey
 {
 }

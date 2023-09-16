@@ -4,11 +4,11 @@ namespace Rikudou\DynamoDbOrm\Service\NameConverter;
 
 use RuntimeException;
 
-final class CamelCaseToKebabCaseNameConverter implements NameConverterInterface
+final class CamelCaseToKebabCaseNameConverter implements NameConverter
 {
     public function convertForDynamoDb(string $name): string
     {
-        $result = preg_replace_callback('@[A-Z]@', function ($matches) {
+        $result = preg_replace_callback('@[A-Z]@', static function ($matches) {
             return '_' . strtolower($matches[0]);
         }, $name);
 
@@ -21,7 +21,7 @@ final class CamelCaseToKebabCaseNameConverter implements NameConverterInterface
 
     public function convertFromDynamoDb(string $name): string
     {
-        $result = preg_replace_callback('@_([a-z])@', function ($matches) {
+        $result = preg_replace_callback('@_([a-z])@', static function ($matches) {
             return strtoupper($matches[1]);
         }, $name);
 

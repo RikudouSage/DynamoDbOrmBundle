@@ -2,15 +2,11 @@
 
 namespace Rikudou\DynamoDbOrm\Service\Migration;
 
-use Rikudou\DynamoDbOrm\Enums\Types;
-use function Safe\sleep;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
 
 final class CreateMigrationTableMigration extends AbstractMigration
 {
-    /**
-     * @var string
-     */
-    private $migrationTable;
+    private string $migrationTable;
 
     public function __construct(string $migrationTable)
     {
@@ -20,7 +16,7 @@ final class CreateMigrationTableMigration extends AbstractMigration
     public function up(): void
     {
         if (!$this->tableExists($this->migrationTable)) {
-            $this->createTable($this->migrationTable, ['version' => Types::NUMBER]);
+            $this->createTable($this->migrationTable, ['version' => ColumnType::Number]);
             $this->waitForTable($this->migrationTable);
             sleep(5);
         }

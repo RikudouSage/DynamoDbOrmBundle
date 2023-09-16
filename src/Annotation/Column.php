@@ -2,24 +2,15 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-use Doctrine\Common\Annotations\Annotation\Enum;
-use Doctrine\Common\Annotations\Annotation\Required;
+use Attribute;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
 
-/**
- * @Annotation
- */
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final class Column
 {
-    /**
-     * @var string
-     */
-    public $name = null;
-
-    /**
-     * @Enum({"string", "number", "binary", "boolean", "array", "json"})
-     * @Required()
-     *
-     * @var string
-     */
-    public $type;
+    public function __construct(
+        public readonly ColumnType $type,
+        public ?string $name = null,
+    ) {
+    }
 }

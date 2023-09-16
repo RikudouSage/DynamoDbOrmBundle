@@ -9,21 +9,17 @@ final class EntityMetadataRegistry
     /**
      * @var EntityClassMetadata[]
      */
-    private $classMetadata = [];
+    private array $classMetadata = [];
 
     public function __construct(EntityClassMetadata ...$classMetadata)
     {
         foreach ($classMetadata as $metadata) {
-            $this->classMetadata[$metadata->getClass()] = $metadata;
+            $this->classMetadata[$metadata->class] = $metadata;
         }
     }
 
     /**
-     * @param string $entity
-     *
      * @throws EntityNotFoundException
-     *
-     * @return EntityClassMetadata
      */
     public function getForEntity(string $entity): EntityClassMetadata
     {

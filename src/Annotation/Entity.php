@@ -2,13 +2,13 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-/**
- * @Annotation
- */
-final class Entity
+use Attribute;
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final readonly class Entity
 {
-    /**
-     * @var string
-     */
-    public $table;
+    public function __construct(
+        public string $table,
+    ) {
+    }
 }

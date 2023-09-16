@@ -2,7 +2,7 @@
 
 namespace Rikudou\DynamoDbOrm\DependencyInjection;
 
-use Aws\DynamoDb\DynamoDbClient;
+use AsyncAws\DynamoDb\DynamoDbClient;
 use Exception;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -10,11 +10,23 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 
+/**
+ * @phpstan-type ConfigArray array{
+ *  dynamodb: array{
+ *     service: string | null,
+ *     region: string,
+ *     version: string,
+ *  },
+ *  table_prefix: string | null,
+ *  migrations_table: string,
+ *  directories: string[],
+ *  table_mapping: array<string, string> | null
+ * }
+ */
 final class RikudouDynamoDbOrmExtension extends Extension
 {
     /**
      * @param array<string,mixed> $configs
-     * @param ContainerBuilder    $container
      *
      * @throws Exception
      */
@@ -25,6 +37,9 @@ final class RikudouDynamoDbOrmExtension extends Extension
         $loader->load('commands.yaml');
         $loader->load('aliases.yaml');
 
+        /**
+         * @var ConfigArray $configs
+         */
         $configs = $this->processConfiguration(new Configuration(), $configs);
         $this->createDynamoDbService($configs, $container);
         $this->createTableNameConverter($configs, $container);
@@ -32,8 +47,7 @@ final class RikudouDynamoDbOrmExtension extends Extension
     }
 
     /**
-     * @param array<string, mixed> $configs
-     * @param ContainerBuilder     $container
+     * @param ConfigArray $configs
      */
     private function createDynamoDbService(array $configs, ContainerBuilder $container): void
     {
@@ -43,19 +57,16 @@ final class RikudouDynamoDbOrmExtension extends Extension
             $serviceToAlias = $configs['dynamodb']['service'];
             $container->setAlias($serviceName, $serviceToAlias);
         } else {
-            $serviceName = 'rikudou.internal.dynamo_orm.dynamo_client';
             $definition = new Definition(DynamoDbClient::class);
             $definition->addArgument([
                 'region' => $configs['dynamodb']['region'],
-                'version' => $configs['dynamodb']['version'],
             ]);
             $container->setDefinition($serviceName, $definition);
         }
     }
 
     /**
-     * @param array<string,mixed> $configs
-     * @param ContainerBuilder    $container
+     * @param ConfigArray $configs
      */
     private function createParameters(array $configs, ContainerBuilder $container): void
     {
@@ -65,8 +76,7 @@ final class RikudouDynamoDbOrmExtension extends Extension
     }
 
     /**
-     * @param array<string,mixed> $configs
-     * @param ContainerBuilder    $container
+     * @param ConfigArray $configs
      */
     private function createTableNameConverter(array $configs, ContainerBuilder $container): void
     {

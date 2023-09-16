@@ -7,7 +7,7 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Reference;
 
-final class RegisterMigrations implements CompilerPassInterface
+final readonly class RegisterMigrations implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void
     {

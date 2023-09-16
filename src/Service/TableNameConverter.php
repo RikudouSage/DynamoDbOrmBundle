@@ -2,16 +2,11 @@
 
 namespace Rikudou\DynamoDbOrm\Service;
 
-final class TableNameConverter
+final readonly class TableNameConverter
 {
-    /**
-     * @var string|null
-     */
-    private $prefix;
-
-    public function __construct(?string $prefix)
-    {
-        $this->prefix = $prefix;
+    public function __construct(
+        private ?string $prefix
+    ) {
     }
 
     public function getName(string $name): string

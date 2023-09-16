@@ -2,28 +2,33 @@
 
 namespace Rikudou\DynamoDbOrm\Service\Repository;
 
+use ReflectionException;
+use Rikudou\DynamoDbOrm\Enum\SortOrder;
+use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Service\EntityManager\EntityManagerInterface;
 use Rikudou\DynamoDbOrm\Service\EntityMapper;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
 
-abstract class AbstractRepository implements RepositoryInterface
+/**
+ * @template TEntity of object
+ *
+ * @implements Repository<TEntity>
+ */
+abstract class AbstractRepository implements Repository
 {
-    /**
-     * @var EntityManagerInterface
-     */
-    private $entityManager;
+    private EntityManagerInterface $entityManager;
+
+    protected EntityMetadataRegistry $entityMetadataRegistry;
+
+    private EntityMapper $entityMapper;
 
     /**
-     * @var EntityMetadataRegistry
+     * @throws ReflectionException
+     * @throws EntityNotFoundException
+     *
+     * @return TEntity|null
      */
-    private $entityMetadataRegistry;
-
-    /**
-     * @var EntityMapper
-     */
-    private $entityMapper;
-
-    public function find($id): ?object
+    public function find(int|string $id): ?object
     {
         $result = $this->entityManager->find($this->getEntityClass(), $id);
         if ($result === null) {
@@ -33,7 +38,15 @@ abstract class AbstractRepository implements RepositoryInterface
         return $this->entityMapper->map($this->getEntityClass(), $result);
     }
 
-    public function findBy(array $conditions = [], string $order = 'ASC'): array
+    /**
+     * @param array<string, mixed> $conditions
+     *
+     * @throws EntityNotFoundException
+     * @throws ReflectionException
+     *
+     * @return array<TEntity>
+     */
+    public function findBy(array $conditions = [], SortOrder $order = SortOrder::Ascending): array
     {
         return $this->entityMapper->mapMultiple(
             $this->getEntityClass(),
@@ -41,6 +54,14 @@ abstract class AbstractRepository implements RepositoryInterface
         );
     }
 
+    /**
+     * @param array<string, mixed> $conditions
+     *
+     * @throws EntityNotFoundException
+     * @throws ReflectionException
+     *
+     * @return TEntity|null
+     */
     public function findOneBy(array $conditions = []): ?object
     {
         $result = $this->entityManager->findOneBy($this->getEntityClass(), $conditions);
@@ -51,7 +72,13 @@ abstract class AbstractRepository implements RepositoryInterface
         return $this->entityMapper->map($this->getEntityClass(), $result);
     }
 
-    public function findAll(string $order = 'ASC'): array
+    /**
+     * @throws EntityNotFoundException
+     * @throws ReflectionException
+     *
+     * @return TEntity[]
+     */
+    public function findAll(SortOrder $order = SortOrder::Ascending): array
     {
         return $this->entityMapper->mapMultiple(
             $this->getEntityClass(),

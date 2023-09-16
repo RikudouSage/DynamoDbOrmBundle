@@ -2,40 +2,40 @@
 
 namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 
+use AsyncAws\DynamoDb\ValueObject\AttributeValue;
+use Rikudou\DynamoDbOrm\Enum\SortOrder;
+
 interface EntityManagerInterface
 {
     /**
-     * @param string $entity
-     * @param mixed  $id
+     * @param class-string<object> $entity
      *
-     * @return array<string,array<string,mixed>>
+     * @return array<string, AttributeValue>|null
      */
-    public function find(string $entity, $id): ?array;
+    public function find(string $entity, mixed $id): ?array;
 
     /**
-     * @param string              $entity
-     * @param array<string,mixed> $conditions
-     * @param string              $order
+     * @param class-string<object> $entity
+     * @param array<string, mixed> $conditions
      *
-     * @return array<string,array<string,mixed>>[]
+     * @return iterable<array<string, AttributeValue>>
      */
-    public function findBy(string $entity, array $conditions = [], string $order = 'ASC'): array;
+    public function findBy(string $entity, array $conditions = [], SortOrder $order = SortOrder::Ascending): iterable;
 
     /**
-     * @param string              $entity
-     * @param array<string,mixed> $conditions
+     * @param class-string<object> $entity
+     * @param array<string,mixed>  $conditions
      *
-     * @return array<string,array<string,mixed>>
+     * @return array<string, AttributeValue>|null
      */
     public function findOneBy(string $entity, array $conditions = []): ?array;
 
     /**
-     * @param string $entity
-     * @param string $order
+     * @param class-string<object> $entity
      *
-     * @return array<string,array<string,mixed>>[]
+     * @return iterable<array<string, AttributeValue>>
      */
-    public function findAll(string $entity, string $order = 'ASC'): array;
+    public function findAll(string $entity, SortOrder $order = SortOrder::Ascending): iterable;
 
     public function delete(object $entity): void;
 

@@ -2,29 +2,18 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-use Doctrine\Common\Annotations\Annotation\Required;
-use Doctrine\Common\Annotations\Annotation\Target;
+use Attribute;
 
-/**
- * @Annotation
- * @Target("PROPERTY")
- */
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final class ManyToOne
 {
     /**
-     * @Required()
-     *
-     * @var string
+     * @param class-string $entity
      */
-    public $entity;
-
-    /**
-     * @var string
-     */
-    public $joinColumn;
-
-    /**
-     * @var string
-     */
-    public $indexName;
+    public function __construct(
+        public readonly string $entity,
+        public string $joinColumn,
+        public string $indexName,
+    ) {
+    }
 }

@@ -2,7 +2,7 @@
 
 namespace Rikudou\DynamoDbOrm\Service\NameConverter;
 
-interface NameConverterInterface
+interface NameConverter
 {
     public function convertForDynamoDb(string $name): string;
 

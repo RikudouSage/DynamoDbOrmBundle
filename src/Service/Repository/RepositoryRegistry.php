@@ -7,23 +7,33 @@ use Rikudou\DynamoDbOrm\Exception\RepositoryNotFoundException;
 final class RepositoryRegistry implements RepositoryRegistryInterface
 {
     /**
-     * @var RepositoryInterface[]
+     * @var Repository<object>[]
      */
-    private $repositories;
+    private array $repositories;
 
-    public function __construct(RepositoryInterface ...$repositories)
+    /**
+     * @param Repository<object> ...$repositories
+     */
+    public function __construct(Repository ...$repositories)
     {
         foreach ($repositories as $repository) {
             $this->repositories[$repository->getEntityClass()] = $repository;
         }
     }
 
-    public function getRepository(string $entity): RepositoryInterface
+    /**
+     * @template TEntity of object
+     *
+     * @param class-string<TEntity> $entity
+     *
+     * @return Repository<TEntity>
+     */
+    public function getRepository(string $entity): Repository
     {
         if (!isset($this->repositories[$entity])) {
             throw new RepositoryNotFoundException("The repository for entity '{$entity}' does not exist");
         }
 
-        return $this->repositories[$entity];
+        return $this->repositories[$entity]; // @phpstan-ignore-line
     }
 }

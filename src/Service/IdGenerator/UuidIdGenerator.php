@@ -2,12 +2,12 @@
 
 namespace Rikudou\DynamoDbOrm\Service\IdGenerator;
 
-use Ramsey\Uuid\Uuid;
+use Symfony\Component\Uid\Uuid;
 
-final class UuidIdGenerator implements IdGeneratorInterface
+final class UuidIdGenerator implements IdGenerator
 {
-    public function generateId()
+    public function generateId(): string
     {
-        return Uuid::uuid4()->toString();
+        return (string) Uuid::v4();
     }
 }

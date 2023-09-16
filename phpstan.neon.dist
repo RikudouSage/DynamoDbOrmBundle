@@ -3,9 +3,5 @@ includes:
 
 parameters:
   inferPrivatePropertyTypeFromConstructor: true
-  excludes_analyse:
+  excludePaths:
     - src/DependencyInjection/Configuration.php
-  ignoreErrors:
-#    - '#.*?expects unknown_type.*?#'
-#    - '#.*?unknown class Query.*?#'
-    - '#expects class-string<T of object>\|T of object, string given.#'

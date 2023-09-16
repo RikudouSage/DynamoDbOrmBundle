@@ -6,9 +6,9 @@ use Rikudou\DynamoDbOrm\DependencyInjection\Compiler\RegisterEntitiesCompilerPas
 use Rikudou\DynamoDbOrm\DependencyInjection\Compiler\RegisterGeneratorsCompilerPass;
 use Rikudou\DynamoDbOrm\DependencyInjection\Compiler\RegisterMigrations;
 use Rikudou\DynamoDbOrm\DependencyInjection\Compiler\RegisterRepositoriesCompilerPass;
-use Rikudou\DynamoDbOrm\Service\IdGenerator\IdGeneratorInterface;
-use Rikudou\DynamoDbOrm\Service\Migration\MigrationInterface;
-use Rikudou\DynamoDbOrm\Service\Repository\RepositoryInterface;
+use Rikudou\DynamoDbOrm\Service\IdGenerator\IdGenerator;
+use Rikudou\DynamoDbOrm\Service\Migration\Migration;
+use Rikudou\DynamoDbOrm\Service\Repository\Repository;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
@@ -16,11 +16,11 @@ final class RikudouDynamoDbOrmBundle extends Bundle
 {
     public function build(ContainerBuilder $container): void
     {
-        $container->registerForAutoconfiguration(IdGeneratorInterface::class)
+        $container->registerForAutoconfiguration(IdGenerator::class)
             ->addTag('rikudou.dynamo_orm.id_generator');
-        $container->registerForAutoconfiguration(RepositoryInterface::class)
+        $container->registerForAutoconfiguration(Repository::class)
             ->addTag('rikudou.dynamo_orm.repository');
-        $container->registerForAutoconfiguration(MigrationInterface::class)
+        $container->registerForAutoconfiguration(Migration::class)
             ->addTag('rikudou.dynamo_orm.migration');
 
         $container->addCompilerPass(new RegisterGeneratorsCompilerPass());

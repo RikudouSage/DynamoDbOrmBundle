@@ -2,7 +2,7 @@
 
 namespace Rikudou\DynamoDbOrm\Service\Migration;
 
-interface MigrationInterface
+interface Migration
 {
     public function up(): void;
 

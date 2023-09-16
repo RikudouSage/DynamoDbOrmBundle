@@ -2,43 +2,58 @@
 
 namespace Rikudou\DynamoDbOrm\DependencyInjection\Compiler;
 
-use Doctrine\Common\Annotations\AnnotationReader;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use ReflectionClass;
 use Rikudou\DynamoDbOrm\Annotation\Entity;
 use Rikudou\DynamoDbOrm\Exception\InvalidDirectoryException;
 use Rikudou\DynamoDbOrm\Exception\InvalidParameterException;
+use Rikudou\DynamoDbOrm\Service\AttributeReader;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityClassMetadata;
-use Rikudou\ReflectionFile;
+use Rikudou\DynamoDbOrm\Service\FileParser;
 use SplFileInfo;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
-use Throwable;
 
-final class RegisterEntitiesCompilerPass implements CompilerPassInterface
+final readonly class RegisterEntitiesCompilerPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void
     {
         $tableMapping = $container->getParameter('rikudou.internal.dynamo_orm.table_mapping');
         $metadataRegistryDefinition = $container->getDefinition('rikudou.dynamo_orm.entity_metadata.registry');
 
+        $nodeTraverser = new NodeTraverser();
+        $nodeTraverser->addVisitor(new NameResolver());
+        $fileParser = new FileParser(
+            (new ParserFactory())->create(ParserFactory::PREFER_PHP7),
+            $nodeTraverser,
+        );
+
         $directories = $container->getParameter('rikudou.dynamo_orm.scan_directories');
-        $directories = array_map(function (string $directory) use ($container) {
+        assert(is_array($directories));
+        $directories = array_map(static function (string $directory) use ($container) {
             return [
                 'original' => $directory,
-                'resolved' => preg_replace_callback('@%(.+?)%@', function ($matches) use ($container) {
+                'resolved' => preg_replace_callback('@%(.+?)%@', static function ($matches) use ($container) {
                     if (!$container->hasParameter($matches[1])) {
                         throw new InvalidParameterException("Trying to load unknown parameter '{$matches[1]}'");
                     }
 
-                    return $container->getParameter($matches[1]);
+                    $result = $container->getParameter($matches[1]);
+                    assert(is_string($result));
+
+                    return $result;
                 }, $directory),
             ];
         }, $directories);
 
         foreach ($directories as $directory) {
+            assert(is_string($directory['resolved']));
             if (!is_dir($directory['resolved'])) {
                 throw new InvalidDirectoryException("Unknown directory '{$directory['resolved']}' (expanded from '{$directory['original']}')");
             }
@@ -48,7 +63,7 @@ final class RegisterEntitiesCompilerPass implements CompilerPassInterface
                 )
             );
 
-            $annotationReader = new AnnotationReader();
+            $attributeReader = new AttributeReader();
 
             /** @var SplFileInfo $file */
             foreach ($iterator as $file) {
@@ -59,14 +74,13 @@ final class RegisterEntitiesCompilerPass implements CompilerPassInterface
                     continue;
                 }
 
-                try {
-                    $reflection = new ReflectionFile($file->getPathname());
-                    $classReflection = $reflection->getClass();
-                } catch (Throwable $e) {
+                $className = $fileParser->getClass($file->getPathname());
+                if ($className === null) {
                     continue;
                 }
+                $classReflection = new ReflectionClass($className);
 
-                if (!$annotationReader->getClassAnnotation($classReflection, Entity::class)) {
+                if (!$attributeReader->getClassAnnotation($classReflection, Entity::class)) {
                     continue;
                 }
 

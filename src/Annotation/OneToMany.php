@@ -2,26 +2,17 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-use Doctrine\Common\Annotations\Annotation\Required;
-use Doctrine\Common\Annotations\Annotation\Target;
+use Attribute;
 
-/**
- * @Annotation
- * @Target("PROPERTY")
- */
-final class OneToMany
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final readonly class OneToMany
 {
     /**
-     * @Required()
-     *
-     * @var string
+     * @param class-string $entity
      */
-    public $entity;
-
-    /**
-     * @Required()
-     *
-     * @var string
-     */
-    public $targetField;
+    public function __construct(
+        public string $entity,
+        public string $targetField,
+    ) {
+    }
 }

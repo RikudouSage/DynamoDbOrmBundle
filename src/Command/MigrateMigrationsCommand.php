@@ -2,27 +2,22 @@
 
 namespace Rikudou\DynamoDbOrm\Command;
 
-use Rikudou\DynamoDbOrm\Service\Migration\MigrationInterface;
+use Rikudou\DynamoDbOrm\Service\Migration\Migration;
 use Rikudou\DynamoDbOrm\Service\Migration\MigrationManager;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+#[AsCommand('rikudou:dynamo:migrate')]
 final class MigrateMigrationsCommand extends Command
 {
-    protected static $defaultName = 'rikudou:dynamo:migrate';
-
-    /**
-     * @var MigrationManager
-     */
-    private $migrationManager;
-
-    public function __construct(MigrationManager $migrationManager)
-    {
+    public function __construct(
+        private readonly MigrationManager $migrationManager
+    ) {
         parent::__construct();
-        $this->migrationManager = $migrationManager;
     }
 
     protected function configure(): void
@@ -45,7 +40,8 @@ final class MigrateMigrationsCommand extends Command
             $io->error('The target must be a version number');
 
             return self::FAILURE;
-        } elseif ($target !== null) {
+        }
+        if ($target !== null) {
             $target = (int) $target;
         }
 
@@ -62,7 +58,7 @@ final class MigrateMigrationsCommand extends Command
 
         $i = 1;
         foreach ($migrationsToApply['down'] as $migration) {
-            assert($migration instanceof MigrationInterface);
+            assert($migration instanceof Migration);
             $io->note("Processing migration {$i} of {$migrationsCount}");
             $migration->down();
             $this->migrationManager->markMigrationAsUndone($migration);
@@ -70,7 +66,7 @@ final class MigrateMigrationsCommand extends Command
         }
 
         foreach ($migrationsToApply['up'] as $migration) {
-            assert($migration instanceof MigrationInterface);
+            assert($migration instanceof Migration);
             $io->note("Processing migration {$i} of {$migrationsCount}");
             $migration->up();
             $this->migrationManager->markMigrationAsDone($migration);

@@ -4,5 +4,12 @@ namespace Rikudou\DynamoDbOrm\Service\Repository;
 
 interface RepositoryRegistryInterface
 {
-    public function getRepository(string $entity): RepositoryInterface;
+    /**
+     * @template TEntity of object
+     *
+     * @param class-string<TEntity> $entity
+     *
+     * @return Repository<TEntity>
+     */
+    public function getRepository(string $entity): Repository;
 }

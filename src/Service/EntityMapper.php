@@ -2,66 +2,57 @@
 
 namespace Rikudou\DynamoDbOrm\Service;
 
+use AsyncAws\DynamoDb\ValueObject\AttributeValue;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
 use Rikudou\DynamoDbOrm\Service\Repository\RepositoryRegistryInterface;
-use function Safe\json_decode;
 use Symfony\Component\String\Inflector\EnglishInflector;
 use Symfony\Component\String\Inflector\InflectorInterface;
+
+use function Safe\json_decode;
 
 final class EntityMapper
 {
     /**
-     * @var array<string,array<string|int,object>>
+     * @var array<string, array<string|int, object>>
      */
-    private $mapped = [];
+    private array $mapped = [];
 
-    /**
-     * @var EntityMetadataRegistry
-     */
-    private $entityMetadataRegistry;
-
-    /**
-     * @var RepositoryRegistryInterface
-     */
-    private $repositoryRegistry;
-
-    /**
-     * @var InflectorInterface
-     */
-    private $inflector;
+    private readonly InflectorInterface $inflector;
 
     public function __construct(
-        EntityMetadataRegistry $entityMetadataRegistry,
-        RepositoryRegistryInterface $repositoryRegistry
+        private readonly EntityMetadataRegistry $entityMetadataRegistry,
+        private readonly RepositoryRegistryInterface $repositoryRegistry
     ) {
-        $this->entityMetadataRegistry = $entityMetadataRegistry;
-        $this->repositoryRegistry = $repositoryRegistry;
         $this->inflector = new EnglishInflector();
     }
 
     /**
-     * @param string                            $entityClass
-     * @param array<string,array<string,mixed>> $data
+     * @template TEntity of object
+     *
+     * @param class-string<TEntity>         $entityClass
+     * @param array<string, AttributeValue> $data
      *
      * @throws ReflectionException
      * @throws EntityNotFoundException
      *
-     * @return object
+     * @return TEntity
      */
     public function map(string $entityClass, array $data): object
     {
+        $data = $this->attributeMapToArray($data);
+
         $reflection = new ReflectionClass($entityClass);
         $entity = $reflection->newInstanceWithoutConstructor();
         $metadata = $this->entityMetadataRegistry->getForEntity($entityClass);
 
         $primaryKey = $metadata->getPrimaryColumn();
-        $primaryKeyValue = $data[$primaryKey->getName()][$primaryKey->getType()];
+        $primaryKeyValue = $data[$primaryKey->name][$primaryKey->getType()];
         if (isset($this->mapped[$entityClass][$primaryKeyValue])) {
-            return $this->mapped[$entityClass][$primaryKeyValue];
+            return $this->mapped[$entityClass][$primaryKeyValue]; // @phpstan-ignore-line
         }
 
         $this->mapped[$entityClass][$primaryKeyValue] = $entity;
@@ -73,17 +64,20 @@ final class EntityMapper
             $value = $valueData[$columnDefinition->getType()];
 
             if ($columnDefinition->isManyToOne()) {
-                if (isset($this->mapped[$columnDefinition->getManyToOneEntity()][$value])) {
-                    $value = $this->mapped[$columnDefinition->getManyToOneEntity()][$value];
+                if (isset($this->mapped[$columnDefinition->manyToOneEntity][$value])) {
+                    $value = $this->mapped[$columnDefinition->manyToOneEntity][$value];
                 } else {
-                    assert($columnDefinition->getManyToOneEntity() !== null);
-                    $repository = $this->repositoryRegistry->getRepository($columnDefinition->getManyToOneEntity());
+                    assert($columnDefinition->manyToOneEntity !== null);
+                    $repository = $this->repositoryRegistry->getRepository($columnDefinition->manyToOneEntity);
+                    assert(is_string($value) || is_int($value));
                     $value = $repository->find($value);
                 }
             } elseif ($rawType === 'array' || $rawType === 'json') {
+                assert(is_string($value));
                 $value = json_decode($value, true);
             } elseif ($rawType === 'number') {
-                if (strval(intval($value)) !== $value) {
+                assert(is_string($value));
+                if ((string) ((int) $value) !== $value) {
                     $value = (float) $value;
                 } else {
                     $value = (int) $value;
@@ -93,19 +87,18 @@ final class EntityMapper
             $setter = 'set' . ucfirst($columnName);
             if (!method_exists($entity, $setter)) {
                 $propertyReflection = $reflection->getProperty($columnName);
-                $propertyReflection->setAccessible(true);
                 $propertyReflection->setValue($entity, $value);
             } else {
                 $callable = [$entity, $setter];
                 assert(is_callable($callable));
-                call_user_func($callable, $value);
+                $callable($value);
             }
         }
 
         foreach ($metadata->getColumns() as $columnName => $column) {
             if ($column->isOneToMany()) {
-                assert($column->getOneToManyEntity() !== null);
-                $repository = $this->repositoryRegistry->getRepository($column->getOneToManyEntity());
+                assert($column->oneToManyEntity !== null);
+                $repository = $this->repositoryRegistry->getRepository($column->oneToManyEntity);
                 $adders = ['add' . ucfirst($this->inflector->singularize($columnName)[0])];
 
                 $callable = null;
@@ -116,9 +109,8 @@ final class EntityMapper
                     }
                 }
                 if ($callable === null) {
-                    $callable = function ($value) use ($columnName, $entity) {
-                        $reflection = new ReflectionProperty(get_class($entity), $columnName);
-                        $reflection->setAccessible(true);
+                    $callable = static function ($value) use ($columnName, $entity): void {
+                        $reflection = new ReflectionProperty($entity::class, $columnName);
                         $originalValue = $reflection->getValue($entity);
                         if (!is_array($originalValue)) {
                             $originalValue = [];
@@ -128,12 +120,12 @@ final class EntityMapper
                     };
                 }
                 $linkedEntities = $repository->findBy([
-                    $column->getOneToManyField() => $primaryKeyValue,
+                    $column->oneToManyField => $primaryKeyValue,
                 ]);
 
                 assert(is_callable($callable));
                 foreach ($linkedEntities as $linkedEntity) {
-                    call_user_func($callable, $linkedEntity);
+                    $callable($linkedEntity);
                 }
             }
         }
@@ -144,15 +136,17 @@ final class EntityMapper
     }
 
     /**
-     * @param string                              $entityClass
-     * @param array<string,array<string,mixed>>[] $items
+     * @template TEntity of object
+     *
+     * @param class-string<TEntity>                   $entityClass
+     * @param iterable<array<string, AttributeValue>> $items
      *
      * @throws EntityNotFoundException
      * @throws ReflectionException
      *
-     * @return object[]
+     * @return TEntity[]
      */
-    public function mapMultiple(string $entityClass, array $items): array
+    public function mapMultiple(string $entityClass, iterable $items): array
     {
         $result = [];
 
@@ -161,5 +155,39 @@ final class EntityMapper
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, AttributeValue> $data
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function attributeMapToArray(array $data): array
+    {
+        $result = [];
+        foreach ($data as $key => $value) {
+            $result[$key] = $this->attributeValueToArray($value);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function attributeValueToArray(AttributeValue $value): array
+    {
+        return [
+            'S' => $value->getS(),
+            'N' => $value->getN(),
+            'B' => $value->getB(),
+            'SS' => $value->getSs(),
+            'NS' => $value->getNs(),
+            'BS' => $value->getBs(),
+            'NULL' => $value->getNull(),
+            'BOOl' => $value->getBool(),
+            'L' => array_map($this->attributeValueToArray(...), $value->getL()),
+            'M' => $this->attributeMapToArray($value->getM()),
+        ];
     }
 }

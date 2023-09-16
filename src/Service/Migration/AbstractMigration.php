@@ -2,31 +2,26 @@
 
 namespace Rikudou\DynamoDbOrm\Service\Migration;
 
-use Aws\DynamoDb\DynamoDbClient;
-use Aws\DynamoDb\Exception\DynamoDbException;
+use AsyncAws\DynamoDb\DynamoDbClient;
+use AsyncAws\DynamoDb\Enum\IndexStatus;
+use AsyncAws\DynamoDb\Enum\TableStatus;
+use AsyncAws\DynamoDb\Exception\ResourceNotFoundException;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
 use Rikudou\DynamoDbOrm\Exception\MigrationException;
 use Rikudou\DynamoDbOrm\Service\TableNameConverter;
 use Rikudou\DynamoDbOrm\Service\TypeConverter;
 use RuntimeException;
+use Safe\Exceptions\PcreException;
+
 use function Safe\preg_match;
-use function Safe\sleep;
 
-abstract class AbstractMigration implements MigrationInterface
+abstract class AbstractMigration implements Migration
 {
-    /**
-     * @var TypeConverter
-     */
-    private $typeConverter;
+    private TypeConverter $typeConverter;
 
-    /**
-     * @var DynamoDbClient
-     */
-    private $dynamoClient;
+    private DynamoDbClient $dynamoClient;
 
-    /**
-     * @var TableNameConverter
-     */
-    private $tableNameConverter;
+    private TableNameConverter $tableNameConverter;
 
     public function setDependencies(
         TypeConverter $typeConverter,
@@ -39,13 +34,12 @@ abstract class AbstractMigration implements MigrationInterface
     }
 
     /**
+     * @throws PcreException
      * @throws MigrationException
-     *
-     * @return int
      */
     public function getVersion(): int
     {
-        $class = get_class($this);
+        $class = static::class;
         if (preg_match('@^.*?\\\\(?:Version|Migration)([0-9]+)$@', $class, $matches)) {
             return (int) $matches[1];
         }
@@ -54,21 +48,22 @@ abstract class AbstractMigration implements MigrationInterface
     }
 
     /**
-     * @param string                     $tableName
-     * @param array<string, string>      $primaryKey
-     * @param array<string, string>|null $sortKey
+     * @param array<string, ColumnType>      $primaryKey
+     * @param array<string, ColumnType>|null $sortKey
      */
     protected function createTable(
         string $tableName,
         array $primaryKey,
         ?array $sortKey = null
     ): void {
+        assert(count($primaryKey) > 0);
+
         $requestArray = [
             'TableName' => $this->tableNameConverter->getName($tableName),
             'AttributeDefinitions' => [
                 [
                     'AttributeName' => array_key_first($primaryKey),
-                    'AttributeType' => $this->typeConverter->getDynamoType((string) reset($primaryKey)),
+                    'AttributeType' => $this->typeConverter->getDynamoType($primaryKey[array_key_first($primaryKey)]),
                 ],
             ],
             'BillingMode' => 'PAY_PER_REQUEST',
@@ -81,9 +76,10 @@ abstract class AbstractMigration implements MigrationInterface
         ];
 
         if ($sortKey !== null) {
+            assert(count($sortKey) > 0);
             $requestArray['AttributeDefinitions'][] = [
                 'AttributeName' => array_key_first($sortKey),
-                'AttributeType' => $this->typeConverter->getDynamoType((string) reset($sortKey)),
+                'AttributeType' => $this->typeConverter->getDynamoType($sortKey[array_key_first($sortKey)]),
             ];
             $requestArray['KeySchema'][] = [
                 'AttributeName' => array_key_first($sortKey),
@@ -102,13 +98,13 @@ abstract class AbstractMigration implements MigrationInterface
     }
 
     /**
-     * @param string                    $table
-     * @param string                    $indexName
-     * @param array<string,string>      $primaryKey
-     * @param array<string,string>|null $sortKey
+     * @param array<string, ColumnType>      $primaryKey
+     * @param array<string, ColumnType>|null $sortKey
      */
     protected function createIndex(string $table, string $indexName, array $primaryKey, ?array $sortKey = null): void
     {
+        assert(count($primaryKey) > 0);
+
         $keySchema = [
             [
                 'AttributeName' => array_key_first($primaryKey),
@@ -118,18 +114,20 @@ abstract class AbstractMigration implements MigrationInterface
         $attributeDefinitions = [
             [
                 'AttributeName' => array_key_first($primaryKey),
-                'AttributeType' => $this->typeConverter->getDynamoType((string) reset($primaryKey)),
+                'AttributeType' => $this->typeConverter->getDynamoType($primaryKey[array_key_first($primaryKey)]),
             ],
         ];
 
         if ($sortKey !== null) {
+            assert(count($sortKey) > 0);
+
             $keySchema[] = [
                 'AttributeName' => array_key_first($sortKey),
                 'KeyType' => 'RANGE',
             ];
             $attributeDefinitions[] = [
                 'AttributeName' => array_key_first($sortKey),
-                'AttributeType' => $this->typeConverter->getDynamoType((string) reset($sortKey)),
+                'AttributeType' => $this->typeConverter->getDynamoType($sortKey[array_key_first($sortKey)]),
             ];
         }
 
@@ -174,11 +172,8 @@ abstract class AbstractMigration implements MigrationInterface
             ]);
 
             return true;
-        } catch (DynamoDbException $e) {
-            if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
-                return false;
-            }
-            throw $e;
+        } catch (ResourceNotFoundException) {
+            return false;
         }
     }
 
@@ -189,20 +184,19 @@ abstract class AbstractMigration implements MigrationInterface
                 $result = $this->dynamoClient->describeTable([
                     'TableName' => $this->tableNameConverter->getName($table),
                 ]);
-                $status = $result->get('Table')['TableStatus'] === 'ACTIVE';
+                if ($result->getTable() === null) {
+                    throw new RuntimeException('Table description is null');
+                }
+                $status = $result->getTable()->getTableStatus() === TableStatus::ACTIVE;
+                $indexes = $result->getTable()->getGlobalSecondaryIndexes();
 
-                $indexes = $result->get('Table')['GlobalSecondaryIndexes'] ?? [];
                 foreach ($indexes as $index) {
-                    if ($index['IndexStatus'] !== 'ACTIVE') {
+                    if ($index->getIndexStatus() !== IndexStatus::ACTIVE) {
                         $status = false;
                     }
                 }
-            } catch (DynamoDbException $e) {
-                if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
-                    $status = false;
-                } else {
-                    throw $e;
-                }
+            } catch (ResourceNotFoundException) {
+                $status = false;
             } finally {
                 --$retries;
                 sleep($sleep);

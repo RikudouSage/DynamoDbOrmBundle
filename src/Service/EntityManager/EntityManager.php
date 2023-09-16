@@ -2,57 +2,41 @@
 
 namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 
-use Aws\DynamoDb\DynamoDbClient;
+use AsyncAws\DynamoDb\DynamoDbClient;
 use ReflectionException;
 use ReflectionProperty;
+use Rikudou\DynamoDbOrm\Enum\BeforeQuerySendEventType;
+use Rikudou\DynamoDbOrm\Enum\SortOrder;
 use Rikudou\DynamoDbOrm\Event\BeforeQuerySendEvent;
 use Rikudou\DynamoDbOrm\Event\DynamoDbOrmEvents;
 use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Exception\UnsearchableColumnException;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
 use Safe\Exceptions\JsonException;
-use function Safe\json_encode;
-use function Safe\substr;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+use function Safe\json_encode;
 
 final class EntityManager implements EntityManagerInterface
 {
     /**
      * @var object[]
      */
-    private $toPersist = [];
+    private array $toPersist = [];
 
     /**
      * @var object[]
      */
-    private $toDelete = [];
-
-    /**
-     * @var EntityMetadataRegistry
-     */
-    private $entityMetadataRegistry;
-
-    /**
-     * @var DynamoDbClient
-     */
-    private $dynamoDbClient;
-
-    /**
-     * @var EventDispatcherInterface
-     */
-    private $eventDispatcher;
+    private array $toDelete = [];
 
     public function __construct(
-        EntityMetadataRegistry $entityMetadataRegistry,
-        DynamoDbClient $dynamoDbClient,
-        EventDispatcherInterface $eventDispatcher
+        private readonly EntityMetadataRegistry $entityMetadataRegistry,
+        private readonly DynamoDbClient $dynamoDbClient,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {
-        $this->entityMetadataRegistry = $entityMetadataRegistry;
-        $this->dynamoDbClient = $dynamoDbClient;
-        $this->eventDispatcher = $eventDispatcher;
     }
 
-    public function find(string $entity, $id): ?array
+    public function find(string $entity, mixed $id): ?array
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
         $primaryColumn = $metadata->getPrimaryColumn();
@@ -64,21 +48,21 @@ final class EntityManager implements EntityManagerInterface
 
         $requestArray = [
             'Key' => [
-                $primaryColumn->getName() => [
+                $primaryColumn->name => [
                     $primaryColumn->getType() => $id,
                 ],
             ],
             'TableName' => $metadata->getTable(),
         ];
 
-        return $this->dynamoDbClient->getItem($requestArray)->get('Item');
+        return $this->dynamoDbClient->getItem($requestArray)->getItem();
     }
 
-    public function findBy(string $entity, array $conditions = [], string $order = 'ASC'): array
+    public function findBy(string $entity, array $conditions = [], SortOrder $order = SortOrder::Ascending): iterable
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
 
-        if (count($conditions) === 1 && array_key_first($conditions) === $metadata->getPrimaryColumn()->getName()) {
+        if (count($conditions) === 1 && array_key_first($conditions) === $metadata->getPrimaryColumn()->name) {
             $result = $this->find($entity, reset($conditions));
             if ($result === null) {
                 return [];
@@ -98,20 +82,20 @@ final class EntityManager implements EntityManagerInterface
         $i = 0;
         foreach ($conditions as $columnName => $value) {
             $column = $metadata->getColumn($columnName);
-            if (!$column->isSearchable()) {
+            if (!$column->searchable) {
                 throw new UnsearchableColumnException("The column '{$columnName}' of entity '{$entity}' is not searchable");
             }
 
-            if (!$column->isPrimary()) {
-                foreach ($column->getSearchableIndexNames() as $searchableIndexName) {
-                    $indexes[$searchableIndexName][] = $column->getName();
+            if (!$column->primary) {
+                foreach ($column->searchableIndexNames as $searchableIndexName) {
+                    $indexes[$searchableIndexName][] = $column->name;
                 }
             }
 
             if ($column->isManyToOne() && is_object($value)) {
-                assert($column->getManyToOneEntity() !== null);
-                $linkedMetadata = $this->entityMetadataRegistry->getForEntity($column->getManyToOneEntity());
-                $primaryKey = $linkedMetadata->getMappedName($linkedMetadata->getPrimaryColumn()->getName());
+                assert($column->manyToOneEntity !== null);
+                $linkedMetadata = $this->entityMetadataRegistry->getForEntity($column->manyToOneEntity);
+                $primaryKey = $linkedMetadata->getMappedName($linkedMetadata->getPrimaryColumn()->name);
                 $getters = ['get' . ucfirst($primaryKey), 'is' . ucfirst($primaryKey)];
                 $callable = null;
                 foreach ($getters as $getter) {
@@ -121,31 +105,31 @@ final class EntityManager implements EntityManagerInterface
                     }
                 }
                 if ($callable === null) {
-                    $callable = function () use ($primaryKey, $value) {
-                        $reflection = new ReflectionProperty(get_class($value), $primaryKey);
-                        $reflection->setAccessible(true);
+                    $callable = static function () use ($primaryKey, $value) {
+                        $reflection = new ReflectionProperty($value::class, $primaryKey);
 
                         return $reflection->getValue($value);
                     };
                 }
                 assert(is_callable($callable));
-                $value = call_user_func($callable);
+                $value = $callable();
             }
 
             $rawType = $column->getType(false);
             if ($rawType === 'array' || $rawType === 'json') {
                 $value = json_encode($value);
             } elseif ($rawType === 'number') {
+                assert(is_scalar($value));
                 $value = (string) $value;
             }
 
-            $requestArray['KeyConditionExpression'] .= "{$column->getName()} = :value{$i} AND ";
+            $requestArray['KeyConditionExpression'] .= "{$column->name} = :value{$i} AND ";
             $requestArray['ExpressionAttributeValues'][":value{$i}"] = [$column->getType() => $value];
             ++$i;
         }
 
         $requestArray['KeyConditionExpression'] = substr($requestArray['KeyConditionExpression'], 0, -4);
-        $requestArray['ScanIndexForward'] = strcasecmp($order, 'ASC') === 0;
+        $requestArray['ScanIndexForward'] = $order === SortOrder::Ascending;
 
         if (count($indexes) !== 0) {
             $found = false;
@@ -164,68 +148,56 @@ final class EntityManager implements EntityManagerInterface
             }
         }
 
-        $items = [];
-
-        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEvent::TYPE_FIND_BY, $entity, $this->dynamoDbClient);
+        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEventType::FindBy, $entity, $this->dynamoDbClient);
         $this->eventDispatcher->dispatch($event, DynamoDbOrmEvents::BEFORE_QUERY_SEND);
         $result = $event->getResult();
 
         if ($result !== null) {
-            return $result;
+            return $result; // @phpstan-ignore-line
         }
 
-        $requestArray = $event->getRequestData();
+        $requestArray = $event->requestData;
 
-        do {
-            $result = $this->dynamoDbClient->query($requestArray);
-            $items = array_merge($items, $result->get('Items'));
-            $requestArray['ExclusiveStartKey'] = $result->get('LastEvaluatedKey');
-        } while ($result->get('LastEvaluatedKey'));
+        $result = $this->dynamoDbClient->query($requestArray); // @phpstan-ignore-line
 
-        return $items;
+        return $result->getItems();
     }
 
     public function findOneBy(string $entity, array $conditions = []): ?array
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
 
-        if (count($conditions) === 1 && array_key_first($conditions) === $metadata->getPrimaryColumn()->getName()) {
+        if (count($conditions) === 1 && array_key_first($conditions) === $metadata->getPrimaryColumn()->name) {
             return $this->find($entity, reset($conditions));
         }
 
-        $items = $this->findBy($entity, $conditions);
+        $items = [...$this->findBy($entity, $conditions)];
         if (count($items) === 0) {
             return null;
         }
 
-        return reset($items);
+        return $items[array_key_first($items)];
     }
 
-    public function findAll(string $entity, string $order = 'ASC'): array
+    public function findAll(string $entity, SortOrder $order = SortOrder::Ascending): iterable
     {
         $metadata = $this->entityMetadataRegistry->getForEntity($entity);
         $requestArray = [
             'TableName' => $metadata->getTable(),
-            'ScanIndexForward' => strcasecmp($order, 'ASC') === 0,
+            'ScanIndexForward' => $order === SortOrder::Ascending,
         ];
 
-        $items = [];
-
-        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEvent::TYPE_FIND_ALL, $entity, $this->dynamoDbClient);
+        $event = new BeforeQuerySendEvent($requestArray, BeforeQuerySendEventType::FindAll, $entity, $this->dynamoDbClient);
         $this->eventDispatcher->dispatch($event, DynamoDbOrmEvents::BEFORE_QUERY_SEND);
         $result = $event->getResult();
         if ($result !== null) {
-            return $result;
+            return $result; // @phpstan-ignore-line
         }
-        $requestArray = $event->getRequestData();
 
-        do {
-            $result = $this->dynamoDbClient->scan($requestArray);
-            $items = array_merge($items, $result->get('Items'));
-            $requestArray['ExclusiveStartKey'] = $result->get('LastEvaluatedKey');
-        } while ($result->get('LastEvaluatedKey'));
+        $requestArray = $event->requestData;
+        $result = $this->dynamoDbClient->scan($requestArray); // @phpstan-ignore-line
 
-        return $items;
+        return $result->getItems();
     }
 
     public function delete(object $entity): void
@@ -244,10 +216,10 @@ final class EntityManager implements EntityManagerInterface
             $fullRequestItems = $this->getRequestItems();
             $requestItems = $fullRequestItems;
             while ($requestItems) {
-                $result = $this->dynamoDbClient->batchWriteItem([
+                $result = $this->dynamoDbClient->batchWriteItem([ // @phpstan-ignore-line
                     'RequestItems' => $requestItems,
                 ]);
-                $requestItems = $result->get('UnprocessedItems');
+                $requestItems = $result->getUnprocessedItems();
             }
         } while ($fullRequestItems);
     }
@@ -269,7 +241,7 @@ final class EntityManager implements EntityManagerInterface
             if ($count === 25) {
                 break;
             }
-            $metadata = $this->entityMetadataRegistry->getForEntity(get_class($itemToPersist));
+            $metadata = $this->entityMetadataRegistry->getForEntity($itemToPersist::class);
             if (!isset($result[$metadata->getTable()])) {
                 $result[$metadata->getTable()] = [];
             }
@@ -297,11 +269,10 @@ final class EntityManager implements EntityManagerInterface
                 }
 
                 if (!is_callable($getter)) {
-                    $reflection = new ReflectionProperty(get_class($itemToPersist), $columnName);
-                    $reflection->setAccessible(true);
+                    $reflection = new ReflectionProperty($itemToPersist::class, $columnName);
                     $value = $reflection->getValue($itemToPersist);
                 } else {
-                    $value = call_user_func($getter);
+                    $value = $getter();
                 }
 
                 if ($value === null && $generator = $definition->getGenerator()) {
@@ -309,9 +280,9 @@ final class EntityManager implements EntityManagerInterface
                 }
 
                 if ($definition->isManyToOne() && is_object($value)) {
-                    assert($definition->getManyToOneEntity() !== null);
-                    $linkedMetadata = $this->entityMetadataRegistry->getForEntity($definition->getManyToOneEntity());
-                    $primaryKey = $linkedMetadata->getMappedName($linkedMetadata->getPrimaryColumn()->getName());
+                    assert($definition->manyToOneEntity !== null);
+                    $linkedMetadata = $this->entityMetadataRegistry->getForEntity($definition->manyToOneEntity);
+                    $primaryKey = $linkedMetadata->getMappedName($linkedMetadata->getPrimaryColumn()->name);
                     $getters = ['get' . ucfirst($primaryKey), 'is' . ucfirst($primaryKey)];
                     $callable = null;
                     foreach ($getters as $getter) {
@@ -321,15 +292,14 @@ final class EntityManager implements EntityManagerInterface
                         }
                     }
                     if ($callable === null) {
-                        $callable = function () use ($primaryKey, $value) {
-                            $reflection = new ReflectionProperty(get_class($value), $primaryKey);
-                            $reflection->setAccessible(true);
+                        $callable = static function () use ($primaryKey, $value) {
+                            $reflection = new ReflectionProperty($value::class, $primaryKey);
 
                             return $reflection->getValue($value);
                         };
                     }
                     assert(is_callable($callable));
-                    $value = call_user_func($callable);
+                    $value = $callable();
                 }
 
                 $rawType = $definition->getType(false);
@@ -343,7 +313,7 @@ final class EntityManager implements EntityManagerInterface
                     continue;
                 }
 
-                $item[$definition->getName()] = [$definition->getType() => $value];
+                $item[$definition->name] = [$definition->getType() => $value];
             }
 
             unset($this->toPersist[$key]);
@@ -355,7 +325,7 @@ final class EntityManager implements EntityManagerInterface
             if ($count === 25) {
                 break;
             }
-            $metadata = $this->entityMetadataRegistry->getForEntity(get_class($itemToDelete));
+            $metadata = $this->entityMetadataRegistry->getForEntity($itemToDelete::class);
             if (!isset($result[$metadata->getTable()])) {
                 $result[$metadata->getTable()] = [];
             }
@@ -365,7 +335,7 @@ final class EntityManager implements EntityManagerInterface
 
             $value = null;
             foreach ($metadata->getColumns() as $columnName => $definition) {
-                if (!$definition->isPrimary()) {
+                if (!$definition->primary) {
                     continue;
                 }
                 $getterNames = ['get' . ucfirst($columnName), 'is' . ucfirst($columnName)];
@@ -373,13 +343,12 @@ final class EntityManager implements EntityManagerInterface
                     if (method_exists($itemToDelete, $getterName)) {
                         $callable = [$itemToDelete, $getterName];
                         assert(is_callable($callable));
-                        $value = call_user_func($callable);
+                        $value = $callable();
                         break;
                     }
                 }
                 if ($value === null) {
-                    $reflection = new ReflectionProperty(get_class($itemToDelete), $columnName);
-                    $reflection->setAccessible(true);
+                    $reflection = new ReflectionProperty($itemToDelete::class, $columnName);
                     $value = $reflection->getValue($itemToDelete);
                 }
                 break;
@@ -388,7 +357,7 @@ final class EntityManager implements EntityManagerInterface
             $result[$metadata->getTable()][$index[$metadata->getTable()]] = [
                 'DeleteRequest' => [
                     'Key' => [
-                        $metadata->getPrimaryColumn()->getName() => [
+                        $metadata->getPrimaryColumn()->name => [
                             $metadata->getPrimaryColumn()->getType() => $value,
                         ],
                     ],

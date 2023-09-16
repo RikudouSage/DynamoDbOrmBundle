@@ -2,16 +2,13 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-use Doctrine\Common\Annotations\Annotation\Target;
+use Attribute;
 
-/**
- * @Annotation
- * @Target("PROPERTY")
- */
+#[Attribute(Attribute::TARGET_PROPERTY)]
 final class SearchableColumn
 {
-    /**
-     * @var string
-     */
-    public $indexName;
+    public function __construct(
+        public string $indexName,
+    ) {
+    }
 }

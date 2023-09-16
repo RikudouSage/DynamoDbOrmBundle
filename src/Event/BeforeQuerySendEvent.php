@@ -2,87 +2,27 @@
 
 namespace Rikudou\DynamoDbOrm\Event;
 
-use Aws\DynamoDb\DynamoDbClient;
-use JetBrains\PhpStorm\ExpectedValues;
+use AsyncAws\DynamoDb\DynamoDbClient;
+use Rikudou\DynamoDbOrm\Enum\BeforeQuerySendEventType;
+use Symfony\Contracts\EventDispatcher\Event;
 
-final class BeforeQuerySendEvent
+final class BeforeQuerySendEvent extends Event
 {
-    public const TYPE_FIND = 'find';
-
-    public const TYPE_FIND_BY = 'findBy';
-
-    public const TYPE_FIND_ONE_BY = 'findOneBy';
-
-    public const TYPE_FIND_ALL = 'findAll';
-
-    /**
-     * @var array<string,mixed>
-     */
-    private $requestData;
-
-    /**
-     * @var string
-     */
-    private $type;
-
-    /**
-     * @var string
-     */
-    private $entityClass;
-
     /**
      * @var array<mixed>|null
      */
-    private $result = null;
+    private array|null $result = null;
 
     /**
-     * @var DynamoDbClient
-     */
-    private $dynamoDbClient;
-
-    /**
-     * BeforeQuerySendEvent constructor.
-     *
-     * @param array<string,mixed> $requestData
-     * @param string              $type
-     * @param string              $entityClass
-     * @param DynamoDbClient      $dynamoDbClient
+     * @param array<string ,mixed> $requestData
+     * @param class-string<object> $entityClass
      */
     public function __construct(
-        array $requestData,
-        #[ExpectedValues([self::TYPE_FIND, self::TYPE_FIND_BY, self::TYPE_FIND_ONE_BY, self::TYPE_FIND_ALL])]
-        string $type,
-        string $entityClass,
-        DynamoDbClient $dynamoDbClient
+        public readonly array $requestData,
+        public readonly BeforeQuerySendEventType $type,
+        public readonly string $entityClass,
+        public readonly DynamoDbClient $dynamoDbClient
     ) {
-        $this->requestData = $requestData;
-        $this->type = $type;
-        $this->entityClass = $entityClass;
-        $this->dynamoDbClient = $dynamoDbClient;
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    public function getRequestData(): array
-    {
-        return $this->requestData;
-    }
-
-    /**
-     * @return string
-     */
-    public function getType(): string
-    {
-        return $this->type;
-    }
-
-    /**
-     * @return string
-     */
-    public function getEntityClass(): string
-    {
-        return $this->entityClass;
     }
 
     /**
@@ -94,31 +34,9 @@ final class BeforeQuerySendEvent
     }
 
     /**
-     * @return DynamoDbClient
-     */
-    public function getDynamoDbClient(): DynamoDbClient
-    {
-        return $this->dynamoDbClient;
-    }
-
-    /**
-     * @param array<string,mixed> $requestData
-     *
-     * @return BeforeQuerySendEvent
-     */
-    public function setRequestData(array $requestData): BeforeQuerySendEvent
-    {
-        $this->requestData = $requestData;
-
-        return $this;
-    }
-
-    /**
      * @param array<mixed>|null $result
-     *
-     * @return BeforeQuerySendEvent
      */
-    public function setResult(?array $result): BeforeQuerySendEvent
+    public function setResult(?array $result): self
     {
         $this->result = $result;
 

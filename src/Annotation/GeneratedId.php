@@ -2,27 +2,20 @@
 
 namespace Rikudou\DynamoDbOrm\Annotation;
 
-use Doctrine\Common\Annotations\Annotation\Enum;
+use Rikudou\DynamoDbOrm\Enum\GeneratedIdType;
+use Rikudou\DynamoDbOrm\Service\IdGenerator\IdGenerator;
+use Attribute;
 
-/**
- * @Annotation
- */
-final class GeneratedId
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final readonly class GeneratedId
 {
     /**
-     * @Enum({"uuid", "randomString", "custom"})
-     *
-     * @var string
+     * @param class-string<IdGenerator>|null $customGenerator
      */
-    public $type = 'uuid';
-
-    /**
-     * @var int
-     */
-    public $randomStringLength = 20;
-
-    /**
-     * @var string
-     */
-    public $customGenerator = null;
+    public function __construct(
+        public GeneratedIdType $type,
+        public int $randomStringLength = 20,
+        public ?string $customGenerator = null,
+    ) {
+    }
 }

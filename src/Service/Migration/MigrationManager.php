@@ -2,62 +2,50 @@
 
 namespace Rikudou\DynamoDbOrm\Service\Migration;
 
-use Aws\DynamoDb\DynamoDbClient;
-use Aws\DynamoDb\Exception\DynamoDbException;
+use AsyncAws\DynamoDb\DynamoDbClient;
+use AsyncAws\DynamoDb\Exception\ResourceNotFoundException;
+use AsyncAws\DynamoDb\ValueObject\AttributeValue;
 use Rikudou\DynamoDbOrm\Exception\MigrationException;
 use Rikudou\DynamoDbOrm\Service\TableNameConverter;
 use Safe\DateTime;
 use Safe\Exceptions\ArrayException;
-use function Safe\sprintf;
-use function Safe\usort;
 
 final class MigrationManager
 {
     /**
-     * @var MigrationInterface[]
+     * @var Migration[]
      */
-    private $migrations;
+    private array $migrations;
 
-    /**
-     * @var DynamoDbClient
-     */
-    private $client;
-
-    /**
-     * @var string
-     */
-    private $migrationsTable;
+    private string $migrationsTable;
 
     public function __construct(
-        DynamoDbClient $client,
+        private DynamoDbClient $client,
         string $migrationsTable,
         TableNameConverter $tableNameConverter,
-        MigrationInterface ...$migrations
+        Migration ...$migrations
     ) {
         $this->migrations = $migrations;
-        usort($this->migrations, function (MigrationInterface $migration1, MigrationInterface $migration2) {
+        usort($this->migrations, static function (Migration $migration1, Migration $migration2) {
             if ($migration1->getVersion() === $migration2->getVersion()) {
                 throw new MigrationException(sprintf(
                     'There cannot be two migrations with the same version. Version: (%s). Migrations: %s and %s',
                     $migration1->getVersion(),
-                    get_class($migration1),
-                    get_class($migration2)
+                    $migration1::class,
+                    $migration2::class
                 ));
             }
 
             return $migration1->getVersion() < $migration2->getVersion() ? -1 : 1;
         });
 
-        $this->client = $client;
         $this->migrationsTable = $tableNameConverter->getName($migrationsTable);
     }
 
     /**
-     * @param int|null $target
-     *
      * @throws ArrayException
      *
-     * @return MigrationInterface[][]
+     * @return Migration[][]
      */
     public function getMigrationsToApply(?int $target = null): array
     {
@@ -80,14 +68,14 @@ final class MigrationManager
             }
         }
 
-        usort($result['down'], function (MigrationInterface $migration1, MigrationInterface $migration2) {
+        usort($result['down'], static function (Migration $migration1, Migration $migration2) {
             return $migration1->getVersion() > $migration2->getVersion() ? -1 : 1;
         });
 
         return $result;
     }
 
-    public function markMigrationAsDone(MigrationInterface $migration): void
+    public function markMigrationAsDone(Migration $migration): void
     {
         $this->client->putItem([
             'TableName' => $this->migrationsTable,
@@ -102,7 +90,7 @@ final class MigrationManager
         ]);
     }
 
-    public function markMigrationAsUndone(MigrationInterface $migration): void
+    public function markMigrationAsUndone(Migration $migration): void
     {
         $this->client->deleteItem([
             'TableName' => $this->migrationsTable,
@@ -122,14 +110,14 @@ final class MigrationManager
                 'TableName' => $this->migrationsTable,
             ]);
 
-            return array_map(function (array $item) {
-                return (int) $item['version']['N'];
-            }, $result->get('Items'));
-        } catch (DynamoDbException $e) {
-            if ($e->getAwsErrorCode() !== 'ResourceNotFoundException') {
-                throw $e;
-            }
+            return array_map(static function (array $item) {
+                $version = $item['version'];
+                assert($version instanceof AttributeValue);
+                assert($version->getN() !== null);
 
+                return (int) $version->getN();
+            }, [...$result->getItems()]);
+        } catch (ResourceNotFoundException $e) {
             return [];
         }
     }

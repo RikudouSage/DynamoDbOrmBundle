@@ -2,7 +2,6 @@
 
 namespace Rikudou\DynamoDbOrm\Service\EntityMetadata;
 
-use Doctrine\Common\Annotations\AnnotationReader;
 use LogicException;
 use ReflectionClass;
 use ReflectionException;
@@ -13,91 +12,44 @@ use Rikudou\DynamoDbOrm\Annotation\ManyToOne;
 use Rikudou\DynamoDbOrm\Annotation\OneToMany;
 use Rikudou\DynamoDbOrm\Annotation\PrimaryKey;
 use Rikudou\DynamoDbOrm\Annotation\SearchableColumn;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
+use Rikudou\DynamoDbOrm\Enum\GeneratedIdType;
 use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Exception\InvalidEntityException;
 use Rikudou\DynamoDbOrm\Exception\UnknownColumnException;
+use Rikudou\DynamoDbOrm\Service\AttributeReader;
 use Rikudou\DynamoDbOrm\Service\IdGenerator\IdGeneratorRegistry;
-use Rikudou\DynamoDbOrm\Service\NameConverter\NameConverterInterface;
+use Rikudou\DynamoDbOrm\Service\NameConverter\NameConverter;
 use Rikudou\DynamoDbOrm\Service\TableNameConverter;
 use Rikudou\DynamoDbOrm\Service\TypeConverter;
 
 final class EntityClassMetadata
 {
-    /**
-     * @var string
-     */
-    private $class;
+    private string $table;
+
+    private string $primaryKeyIndex;
 
     /**
-     * @var string
+     * @var array<string, array{name: string, primary: bool, type: ColumnType, searchable: bool, searchableIndexNames: array<string>, generator: class-string|GeneratedIdType|null, generatorParameters: array<mixed>, manyToOneEntity: class-string|null, oneToManyEntity: class-string|null, oneToManyField: string|null}>
      */
-    private $table;
+    private array $columns = [];
 
     /**
-     * @var string
-     */
-    private $primaryKeyIndex;
-
-    /**
-     * @var array<string,array<string,mixed>>
-     */
-    private $columns = [];
-
-    /**
-     * @var NameConverterInterface
-     */
-    private $nameConverter;
-
-    /**
-     * @var IdGeneratorRegistry
-     */
-    private $idGeneratorRegistry;
-
-    /**
-     * @var TypeConverter
-     */
-    private $typeConverter;
-
-    /**
-     * @var TableNameConverter
-     */
-    private $tableNameConverter;
-
-    /**
-     * @var array<string, string>
-     */
-    private $tableMapping;
-
-    /**
-     * @param string                 $class
-     * @param array<string, string>  $tableMapping
-     * @param NameConverterInterface $nameConverter
-     * @param IdGeneratorRegistry    $idGeneratorRegistry
-     * @param TypeConverter          $typeConverter
-     * @param TableNameConverter     $tableNameConverter
+     * @param class-string          $class
+     * @param array<string, string> $tableMapping
      *
      * @throws EntityNotFoundException
      */
     public function __construct(
-        string $class,
-        array $tableMapping,
-        NameConverterInterface $nameConverter,
-        IdGeneratorRegistry $idGeneratorRegistry,
-        TypeConverter $typeConverter,
-        TableNameConverter $tableNameConverter
+        public string $class,
+        private readonly array $tableMapping,
+        private readonly NameConverter $nameConverter,
+        private readonly IdGeneratorRegistry $idGeneratorRegistry,
+        private readonly TypeConverter $typeConverter,
+        private readonly TableNameConverter $tableNameConverter,
+        private readonly AttributeReader $attributeReader,
     ) {
-        $this->class = $class;
-        $this->nameConverter = $nameConverter;
-        $this->idGeneratorRegistry = $idGeneratorRegistry;
-        $this->typeConverter = $typeConverter;
-        $this->tableNameConverter = $tableNameConverter;
-        $this->tableMapping = $tableMapping;
         $this->parse();
-    }
-
-    public function getClass(): string
-    {
-        return $this->class;
     }
 
     /**
@@ -160,21 +112,19 @@ final class EntityClassMetadata
 
     private function parse(): void
     {
-        $annotationReader = new AnnotationReader();
-
         try {
             $classReflection = new ReflectionClass($this->class);
-            $entityAnnotation = $annotationReader->getClassAnnotation($classReflection, Entity::class);
-            if (!$entityAnnotation instanceof Entity) {
+            $entityAttribute = $this->attributeReader->getClassAnnotation($classReflection, Entity::class);
+            if (!$entityAttribute instanceof Entity) {
                 throw new InvalidEntityException("The entity '{$this->class}' must contain @Entity annotation");
             }
             if (isset($this->tableMapping[$this->class])) {
                 $this->table = $this->tableMapping[$this->class];
             } else {
-                if (!$entityAnnotation->table) {
+                if (!$entityAttribute->table) {
                     throw new LogicException('You must set the table name in annotation or table mapping in config');
                 }
-                $this->table = $this->tableNameConverter->getName($entityAnnotation->table);
+                $this->table = $this->tableNameConverter->getName($entityAttribute->table);
             }
 
             $hasPrimaryKey = false;
@@ -182,7 +132,7 @@ final class EntityClassMetadata
                 $columnDefinition = [
                     'name' => '',
                     'primary' => false,
-                    'type' => '',
+                    'type' => ColumnType::String,
                     'searchable' => false,
                     'searchableIndexNames' => [],
                     'generator' => null,
@@ -192,9 +142,9 @@ final class EntityClassMetadata
                     'oneToManyField' => null,
                 ];
 
-                $columnAnnotation = $annotationReader->getPropertyAnnotation($propertyReflection, Column::class);
-                $oneToManyAnnotation = $annotationReader->getPropertyAnnotation($propertyReflection, OneToMany::class);
-                $manyToOneAnnotation = $annotationReader->getPropertyAnnotation($propertyReflection, ManyToOne::class);
+                $columnAnnotation = $this->attributeReader->getPropertyAnnotation($propertyReflection, Column::class);
+                $oneToManyAnnotation = $this->attributeReader->getPropertyAnnotation($propertyReflection, OneToMany::class);
+                $manyToOneAnnotation = $this->attributeReader->getPropertyAnnotation($propertyReflection, ManyToOne::class);
                 if ($columnAnnotation instanceof Column) {
                     if ($columnAnnotation->name === null) {
                         $columnAnnotation->name = $this->nameConverter->convertForDynamoDb($propertyReflection->getName());
@@ -202,7 +152,7 @@ final class EntityClassMetadata
                     $columnDefinition['name'] = $columnAnnotation->name;
                     $columnDefinition['type'] = $columnAnnotation->type;
 
-                    $primaryKeyAnnotation = $annotationReader->getPropertyAnnotation($propertyReflection, PrimaryKey::class);
+                    $primaryKeyAnnotation = $this->attributeReader->getPropertyAnnotation($propertyReflection, PrimaryKey::class);
                     if ($primaryKeyAnnotation !== null) {
                         if ($hasPrimaryKey) {
                             throw new InvalidEntityException("Entity '{$this->class}' cannot have more than one primary key");
@@ -213,24 +163,24 @@ final class EntityClassMetadata
                         $columnDefinition['searchable'] = true;
                     }
 
-                    $generatorAnnotation = $annotationReader->getPropertyAnnotation($propertyReflection, GeneratedId::class);
+                    $generatorAnnotation = $this->attributeReader->getPropertyAnnotation($propertyReflection, GeneratedId::class);
                     if ($generatorAnnotation instanceof GeneratedId) {
-                        if ($generatorAnnotation->type === 'custom' && $generatorAnnotation->customGenerator === null) {
+                        if ($generatorAnnotation->type === GeneratedIdType::Custom && $generatorAnnotation->customGenerator === null) {
                             throw new InvalidEntityException("The generator for '{$propertyReflection->getName()}' of entity '{$this->class}' is set to custom but no custom generator is set");
                         }
-                        if ($generatorAnnotation->type === 'randomString') {
+                        if ($generatorAnnotation->type === GeneratedIdType::RandomString) {
                             if ($generatorAnnotation->randomStringLength <= 0 || $generatorAnnotation->randomStringLength % 2 !== 0) {
                                 throw new InvalidEntityException("The randomString generator for '{$propertyReflection->getName()}' of entity '{$this->class}' must be greater than zero and divisible by 2");
                             }
                             $columnDefinition['generatorParameters'][] = $generatorAnnotation->randomStringLength;
                         }
 
-                        $columnDefinition['generator'] = $generatorAnnotation->type === 'custom'
+                        $columnDefinition['generator'] = $generatorAnnotation->type === GeneratedIdType::Custom
                             ? $generatorAnnotation->customGenerator
                             : $generatorAnnotation->type;
                     }
 
-                    $searchableAnnotations = $annotationReader->getPropertyAnnotations($propertyReflection);
+                    $searchableAnnotations = $this->attributeReader->getPropertyAnnotations($propertyReflection);
                     foreach ($searchableAnnotations as $searchableAnnotation) {
                         if ($searchableAnnotation instanceof SearchableColumn) {
                             if (!$searchableAnnotation->indexName) {
@@ -254,9 +204,10 @@ final class EntityClassMetadata
                         $this->nameConverter,
                         $this->idGeneratorRegistry,
                         $this->typeConverter,
-                        $this->tableNameConverter
+                        $this->tableNameConverter,
+                        $this->attributeReader,
                     );
-                    $columnDefinition['type'] = $parser->getPrimaryColumn()->getType(false);
+                    $columnDefinition['type'] = ColumnType::from($parser->getPrimaryColumn()->getType(false));
                     $columnDefinition['searchable'] = true;
                     $columnDefinition['searchableIndexNames'] = [$manyToOneAnnotation->indexName];
                     $columnDefinition['manyToOneEntity'] = $manyToOneAnnotation->entity;
