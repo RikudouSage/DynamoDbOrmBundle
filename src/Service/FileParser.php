@@ -50,7 +50,7 @@ final readonly class FileParser
                     return;
                 }
 
-                $this->className = (string) $node->name;
+                $this->className = (string) $node->namespacedName;
             }
         });
         $this->nodeTraverser->traverse($ast);
