@@ -6,9 +6,11 @@ use AsyncAws\DynamoDb\ValueObject\AttributeValue;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
 use Rikudou\DynamoDbOrm\Exception\EntityNotFoundException;
 use Rikudou\DynamoDbOrm\Service\EntityMetadata\EntityMetadataRegistry;
 use Rikudou\DynamoDbOrm\Service\Repository\RepositoryRegistryInterface;
+use Safe\DateTimeImmutable;
 use Symfony\Component\String\Inflector\EnglishInflector;
 use Symfony\Component\String\Inflector\InflectorInterface;
 
@@ -60,7 +62,7 @@ final class EntityMapper
         foreach ($data as $columnName => $valueData) {
             $columnName = $metadata->getMappedName($columnName);
             $columnDefinition = $metadata->getColumn($columnName);
-            $rawType = $columnDefinition->getType(false);
+            $rawType = ColumnType::from($columnDefinition->getType(false));
             $value = $valueData[$columnDefinition->getType()];
 
             if ($columnDefinition->isManyToOne()) {
@@ -72,16 +74,19 @@ final class EntityMapper
                     assert(is_string($value) || is_int($value));
                     $value = $repository->find($value);
                 }
-            } elseif ($rawType === 'array' || $rawType === 'json') {
+            } elseif ($rawType === ColumnType::Array || $rawType === ColumnType::Json) {
                 assert(is_string($value));
                 $value = json_decode($value, true);
-            } elseif ($rawType === 'number') {
+            } elseif ($rawType === ColumnType::Number) {
                 assert(is_string($value));
                 if ((string) ((int) $value) !== $value) {
                     $value = (float) $value;
                 } else {
                     $value = (int) $value;
                 }
+            } elseif ($rawType === ColumnType::DateTime) {
+                assert(is_string($value));
+                $value = (new DateTimeImmutable())->setTimestamp((int) $value);
             }
 
             $setter = 'set' . ucfirst($columnName);

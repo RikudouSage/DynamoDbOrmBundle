@@ -10,7 +10,7 @@ final class TypeConverter
     {
         return match ($type) {
             ColumnType::Array, ColumnType::Json, ColumnType::String => 'S',
-            ColumnType::Number => 'N',
+            ColumnType::Number, ColumnType::DateTime => 'N',
             ColumnType::Binary => 'B',
             ColumnType::Bool => 'BOOL',
         };

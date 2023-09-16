@@ -10,4 +10,5 @@ enum ColumnType: string
     case Bool = 'boolean';
     case Array = 'array';
     case Json = 'json';
+    case DateTime = 'datetime';
 }
