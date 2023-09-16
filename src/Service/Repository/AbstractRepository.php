@@ -31,7 +31,7 @@ abstract class AbstractRepository implements Repository
     public function find(int|string $id): ?object
     {
         $result = $this->entityManager->find($this->getEntityClass(), $id);
-        if ($result === null) {
+        if ($result === null || !count($result)) {
             return null;
         }
 
@@ -65,7 +65,7 @@ abstract class AbstractRepository implements Repository
     public function findOneBy(array $conditions = []): ?object
     {
         $result = $this->entityManager->findOneBy($this->getEntityClass(), $conditions);
-        if ($result === null) {
+        if ($result === null || !count($result)) {
             return null;
         }
 
