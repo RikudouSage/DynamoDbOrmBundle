@@ -54,7 +54,7 @@ abstract class AbstractMigration implements Migration
     protected function createTable(
         string $tableName,
         array $primaryKey,
-        ?array $sortKey = null
+        ?array $sortKey = null,
     ): void {
         assert(count($primaryKey) > 0);
 
@@ -94,6 +94,17 @@ abstract class AbstractMigration implements Migration
     {
         $this->dynamoClient->deleteTable([
             'TableName' => $this->tableNameConverter->getName($tableName),
+        ]);
+    }
+
+    protected function setTimeToLive(string $tableName, ?string $fieldName): void
+    {
+        $this->dynamoClient->updateTimeToLive([
+            'TableName' => $this->tableNameConverter->getName($tableName),
+            'TimeToLiveSpecification' => [
+                'Enabled' => $fieldName !== null,
+                'AttributeName' => $fieldName,
+            ],
         ]);
     }
 
