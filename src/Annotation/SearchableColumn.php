@@ -8,7 +8,7 @@ use Attribute;
 final class SearchableColumn
 {
     public function __construct(
-        public string $indexName,
+        public ?string $indexName = null,
     ) {
     }
 }

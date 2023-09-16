@@ -3,9 +3,11 @@
 namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 
 use AsyncAws\DynamoDb\DynamoDbClient;
+use AsyncAws\DynamoDb\Exception\ResourceNotFoundException;
 use ReflectionException;
 use ReflectionProperty;
 use Rikudou\DynamoDbOrm\Enum\BeforeQuerySendEventType;
+use Rikudou\DynamoDbOrm\Enum\ColumnType;
 use Rikudou\DynamoDbOrm\Enum\SortOrder;
 use Rikudou\DynamoDbOrm\Event\BeforeQuerySendEvent;
 use Rikudou\DynamoDbOrm\Event\DynamoDbOrmEvents;
@@ -55,7 +57,11 @@ final class EntityManager implements EntityManagerInterface
             'TableName' => $metadata->getTable(),
         ];
 
-        return $this->dynamoDbClient->getItem($requestArray)->getItem();
+        try {
+            return $this->dynamoDbClient->getItem($requestArray)->getItem();
+        } catch (ResourceNotFoundException) {
+            return null;
+        }
     }
 
     public function findBy(string $entity, array $conditions = [], SortOrder $order = SortOrder::Ascending): iterable
@@ -115,10 +121,10 @@ final class EntityManager implements EntityManagerInterface
                 $value = $callable();
             }
 
-            $rawType = $column->getType(false);
-            if ($rawType === 'array' || $rawType === 'json') {
+            $rawType = ColumnType::from($column->getType(false));
+            if ($rawType === ColumnType::Array || $rawType === ColumnType::Json) {
                 $value = json_encode($value);
-            } elseif ($rawType === 'number') {
+            } elseif ($rawType === ColumnType::Number) {
                 assert(is_scalar($value));
                 $value = (string) $value;
             }
