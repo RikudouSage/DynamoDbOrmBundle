@@ -90,6 +90,7 @@ final readonly class RegisterEntitiesCompilerPass implements CompilerPassInterfa
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.id.registry'));
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.type_converter'));
                 $definition->addArgument(new Reference('rikudou.dynamo_orm.table_name_converter'));
+                $definition->addArgument(new Reference('rikudou.dynamo_orm.attribute_reader'));
 
                 $serviceName = 'rikudou.dynamo_orm.class_metadata.'
                     . str_replace('\\', '', $classReflection->getName());

@@ -60,3 +60,6 @@ services:
     class: Rikudou\DynamoDbOrm\Service\IdGenerator\RandomStringIdGenerator
     tags:
       - rikudou.dynamo_orm.id_generator
+
+  rikudou.dynamo_orm.attribute_reader:
+    class: Rikudou\DynamoDbOrm\Service\AttributeReader

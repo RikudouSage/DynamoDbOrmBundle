@@ -5,6 +5,7 @@ namespace Rikudou\DynamoDbOrm\Service;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Parser;
 use Rikudou\DynamoDbOrm\Exception\InvalidFileException;
@@ -34,6 +35,7 @@ final readonly class FileParser
         }
 
         $className = null;
+        $this->nodeTraverser->addVisitor(new NameResolver());
         $this->nodeTraverser->addVisitor(new class($className) extends NodeVisitorAbstract {
             private ?string $className;
             public function __construct(
