@@ -28,7 +28,6 @@ final readonly class RegisterEntitiesCompilerPass implements CompilerPassInterfa
         $metadataRegistryDefinition = $container->getDefinition('rikudou.dynamo_orm.entity_metadata.registry');
 
         $nodeTraverser = new NodeTraverser();
-        $nodeTraverser->addVisitor(new NameResolver());
         $fileParser = new FileParser(
             (new ParserFactory())->create(ParserFactory::PREFER_PHP7),
             $nodeTraverser,

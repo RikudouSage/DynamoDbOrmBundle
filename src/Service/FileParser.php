@@ -2,8 +2,10 @@
 
 namespace Rikudou\DynamoDbOrm\Service;
 
+use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\Parser;
 use Rikudou\DynamoDbOrm\Exception\InvalidFileException;
 
@@ -26,21 +28,31 @@ final readonly class FileParser
             throw new InvalidFileException("The file '{$filePath}' does not exist.");
         }
         $content = file_get_contents($filePath);
-        $statements = $this->parser->parse($content);
-        if ($statements === null) {
+        $ast = $this->parser->parse($content);
+        if ($ast === null) {
             return null;
         }
-        $statements = $this->nodeTraverser->traverse($statements);
 
-        foreach ($statements as $statement) {
-            if ($statement instanceof Class_) {
-                $class = (string) $statement->name;
-                assert(class_exists($class));
-
-                return $class;
+        $className = null;
+        $this->nodeTraverser->addVisitor(new class($className) extends NodeVisitorAbstract {
+            private ?string $className;
+            public function __construct(
+                ?string &$className
+            ) {
+                $this->className = &$className;
             }
-        }
 
-        return null;
+            public function enterNode(Node $node): void
+            {
+                if (!$node instanceof Class_) {
+                    return;
+                }
+
+                $this->className = (string) $node->name;
+            }
+        });
+        $this->nodeTraverser->traverse($ast);
+
+        return $className;
     }
 }
