@@ -316,7 +316,7 @@ final class EntityManager implements EntityManagerInterface
                     $value = (string) $value;
                 } elseif ($rawType === ColumnType::DateTime) {
                     assert($value instanceof DateTimeInterface);
-                    $value = $value->getTimestamp();
+                    $value = (string) $value->getTimestamp();
                 }
 
                 if ($value === null) {
