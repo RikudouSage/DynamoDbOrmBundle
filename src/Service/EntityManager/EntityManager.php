@@ -4,6 +4,7 @@ namespace Rikudou\DynamoDbOrm\Service\EntityManager;
 
 use AsyncAws\DynamoDb\DynamoDbClient;
 use AsyncAws\DynamoDb\Exception\ResourceNotFoundException;
+use DateTimeInterface;
 use ReflectionException;
 use ReflectionProperty;
 use Rikudou\DynamoDbOrm\Enum\BeforeQuerySendEventType;
@@ -308,11 +309,14 @@ final class EntityManager implements EntityManagerInterface
                     $value = $callable();
                 }
 
-                $rawType = $definition->getType(false);
-                if ($rawType === 'array' || $rawType === 'json') {
+                $rawType = ColumnType::from($definition->getType(false));
+                if ($rawType === ColumnType::Array || $rawType === ColumnType::Json) {
                     $value = json_encode($value);
-                } elseif ($rawType === 'number') {
+                } elseif ($rawType === ColumnType::Number) {
                     $value = (string) $value;
+                } elseif ($rawType === ColumnType::DateTime) {
+                    assert($value instanceof DateTimeInterface);
+                    $value = $value->getTimestamp();
                 }
 
                 if ($value === null) {
