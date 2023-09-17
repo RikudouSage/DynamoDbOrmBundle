@@ -190,7 +190,7 @@ final class EntityMapper
             'NS' => $value->getNs(),
             'BS' => $value->getBs(),
             'NULL' => $value->getNull(),
-            'BOOl' => $value->getBool(),
+            'BOOL' => $value->getBool(),
             'L' => array_map($this->attributeValueToArray(...), $value->getL()),
             'M' => $this->attributeMapToArray($value->getM()),
         ];
