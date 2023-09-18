@@ -12,8 +12,8 @@ final class ManyToOne
      */
     public function __construct(
         public readonly string $entity,
-        public string $joinColumn,
-        public string $indexName,
+        public ?string $joinColumn = null,
+        public ?string $indexName = null,
     ) {
     }
 }
